@@ -193,24 +193,58 @@ sandbox_alloc(class)
   return Data_Wrap_Struct( class, mark_sandbox, free_sandbox, kit );
 }
 
+typedef struct {
+  VALUE *argv;
+  sandkit *kit;
+  sandkit *norm;
+} go_cart;
+
+VALUE
+sandbox_go_go_go(go)
+  go_cart *go;
+{
+  return rb_obj_instance_eval(1, go->argv, go->kit->oMain);
+}
+
+VALUE
+sandbox_whoa_whoa_whoa(go)
+  go_cart *go;
+{
+  /* okay, move it all back */
+  sandkit *norm = go->norm;
+  rb_class_tbl = norm->tbl;
+  /* rb_global_tbl = norm->globals; */
+  rb_cObject = norm->cObject;
+  rb_cModule = norm->cModule;
+  rb_cClass = norm->cClass;
+  rb_mKernel = norm->mKernel;
+  ruby_top_self = norm->oMain;
+  /* ruby_frame = frame_save; */
+  free(go->norm);
+  free(go);
+}
+
 VALUE
 sandbox_eval( self, str )
   VALUE self, str;
 {
-  sandkit *kit;
+  sandkit *kit, *norm;
+  go_cart *go;
   static struct FRAME frame;
   static struct FRAME *frame_save;
-  VALUE val, obj, mod, klass, kernel, topself, *argv;
-  st_table *current_tbl = rb_class_tbl; /* *global_tbl = rb_global_tbl; */
+  VALUE val;
   Data_Get_Struct( self, sandkit, kit );
 
   /* save everything */
-  obj = rb_cObject;
-  mod = rb_cModule;
-  klass = rb_cClass;
-  kernel = rb_mKernel;
-  topself = ruby_top_self;
-  frame_save = ruby_frame;
+  norm = ALLOC(sandkit);
+  norm->tbl = rb_class_tbl;
+  /* norm->globals = rb_global_tbl; */
+  norm->cObject = rb_cObject;
+  norm->cModule = rb_cModule;
+  norm->cClass = rb_cClass;
+  norm->mKernel = rb_mKernel;
+  norm->oMain = ruby_top_self;
+  /* frame_save = ruby_frame; */
 
   /* replace everything */
   rb_class_tbl = kit->tbl;
@@ -220,26 +254,14 @@ sandbox_eval( self, str )
   rb_cClass = kit->cClass;
   rb_mKernel = kit->mKernel;
   ruby_top_self = kit->oMain;
-  ruby_frame = &frame;
+  /* ruby_frame = &frame; */
 
-  // rb_funcall( kit->mKernel, rb_intern("eval"), 1, str );
-  // val = rb_eval_string( RSTRING(str)->ptr );
-  // StringValue(str);
-  // eval(ruby_top_self, str, kit->oMain, 0, 0);
-  argv = ALLOC_N(VALUE, 1);
-  argv[0] = str;
-  val = rb_obj_instance_eval(1, argv, kit->oMain);
-  free(argv);
-
-  /* okay, move it all back */
-  rb_class_tbl = current_tbl;
-  /* rb_global_tbl = global_tbl; */
-  rb_cObject = obj;
-  rb_cModule = mod;
-  rb_cClass = klass;
-  rb_mKernel = kernel;
-  ruby_top_self = topself;
-  ruby_frame = frame_save;
+  go = ALLOC(go_cart);
+  go->argv = ALLOC(VALUE);
+  go->argv[0] = str;
+  go->norm = norm;
+  go->kit = kit;
+  rb_ensure(sandbox_go_go_go, go, sandbox_whoa_whoa_whoa, go);
 
   return val;
 }
