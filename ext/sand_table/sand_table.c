@@ -9,6 +9,7 @@
 #include <ruby.h>
 #include <st.h>
 #include <env.h>
+#include <node.h>
 
 extern st_table *rb_class_tbl;
 /* extern st_table *rb_global_tbl; */
@@ -17,12 +18,32 @@ extern VALUE ruby_top_self;
 typedef struct {
   st_table *tbl;
   st_table *globals;
+
   VALUE cObject;
   VALUE cModule;
   VALUE cClass;
   VALUE mKernel;
   VALUE oMain;
+
+  VALUE cArray;
+  VALUE cBignum;
+  VALUE cData;
+  VALUE cFalseClass;
+  VALUE cFixnum;
+  VALUE cFloat;
+  VALUE cHash;
+  VALUE cInteger;
+  VALUE cNilClass;
+  VALUE cNumeric;
+  VALUE cProc;
+  VALUE cRange;
+  VALUE cRegexp;
+  VALUE cString;
+  VALUE cSymbol;
+  VALUE cTrueClass;
 } sandkit;
+
+void Init_kit _((sandkit *));
 
 static void
 mark_sandbox(kit)
@@ -58,6 +79,12 @@ sandbox_module_new(kit)
   mdl->m_tbl = st_init_numtable();
   
   return (VALUE)mdl;
+}
+
+VALUE
+sandbox_dummy()
+{
+    return Qnil;
 }
 
 VALUE
@@ -130,7 +157,6 @@ sandbox_defclass(kit, name, super)
   return obj;
 }
 
-
 VALUE
 sandbox_defmodule(kit, name)
   sandkit *kit;
@@ -153,6 +179,21 @@ sandbox_defmodule(kit, name)
   return module;
 }
 
+#define SAND_COPY(K, M) sandbox_copy_method(kit->K, M, rb_##K);
+
+void
+sandbox_copy_method(klass, name, oklass)
+  VALUE klass, oklass;
+  const char *name;
+{
+  ID def = rb_intern(name);
+  NODE *body;
+     
+  /* FIXME: handle failure? */
+  body = rb_method_node(oklass, def);
+  rb_add_method(klass, def, NEW_CFUNC(body->nd_cfnc, body->nd_argc), NOEX_PUBLIC);
+}
+
 static VALUE sandbox_alloc_obj _((VALUE));
 static VALUE
 sandbox_alloc_obj(klass)
@@ -168,26 +209,8 @@ VALUE
 sandbox_alloc(class)
     VALUE class;
 {
-  VALUE metaclass;
   sandkit *kit = ALLOC(sandkit);
-
-  kit->tbl = st_init_numtable();
-  kit->globals = st_init_numtable();
-  kit->cObject = 0;
-
-  kit->cObject = sandbox_defclass(kit, "Object", 0);
-  kit->cModule = sandbox_defclass(kit, "Module", kit->cObject);
-  kit->cClass =  sandbox_defclass(kit, "Class",  kit->cModule);
-
-  metaclass = sandbox_metaclass(kit, kit->cObject, kit->cClass);
-  metaclass = sandbox_metaclass(kit, kit->cModule, metaclass);
-  metaclass = sandbox_metaclass(kit, kit->cClass, metaclass);
-
-  kit->mKernel = sandbox_defmodule(kit, "Kernel");
-  rb_include_module(kit->cObject, kit->mKernel);
-  rb_define_alloc_func(kit->cObject, sandbox_alloc_obj);
-  kit->oMain = rb_obj_alloc(kit->cObject);
-
+  Init_kit(kit);
   return Data_Wrap_Struct( class, mark_sandbox, free_sandbox, kit );
 }
 
@@ -258,6 +281,185 @@ sandbox_eval( self, str )
   rb_ensure(sandbox_go_go_go, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
 
   return val;
+}
+
+void Init_kit(kit)
+  sandkit *kit;
+{
+  VALUE metaclass;
+
+  kit->tbl = st_init_numtable();
+  kit->globals = st_init_numtable();
+  kit->cObject = 0;
+
+  kit->cObject = sandbox_defclass(kit, "Object", 0);
+  kit->cModule = sandbox_defclass(kit, "Module", kit->cObject);
+  kit->cClass =  sandbox_defclass(kit, "Class",  kit->cModule);
+
+  metaclass = sandbox_metaclass(kit, kit->cObject, kit->cClass);
+  metaclass = sandbox_metaclass(kit, kit->cModule, metaclass);
+  metaclass = sandbox_metaclass(kit, kit->cClass, metaclass);
+
+  kit->mKernel = sandbox_defmodule(kit, "Kernel");
+  rb_include_module(kit->cObject, kit->mKernel);
+  rb_define_alloc_func(kit->cObject, sandbox_alloc_obj);
+  kit->oMain = rb_obj_alloc(kit->cObject);
+
+  rb_define_private_method(kit->cModule, "method_added", sandbox_dummy, 1);
+  rb_define_private_method(kit->cObject, "initialize", sandbox_dummy, 0);
+  rb_define_private_method(kit->cClass, "inherited", sandbox_dummy, 1);
+  rb_define_private_method(kit->cModule, "included", sandbox_dummy, 1);
+  rb_define_private_method(kit->cModule, "extended", sandbox_dummy, 1);
+  rb_define_private_method(kit->cModule, "method_removed", sandbox_dummy, 1);
+  rb_define_private_method(kit->cModule, "method_undefined", sandbox_dummy, 1);
+
+  SAND_COPY(mKernel, "nil?");
+  SAND_COPY(mKernel, "==");
+  SAND_COPY(mKernel, "equal?");
+  SAND_COPY(mKernel, "===");
+  SAND_COPY(mKernel, "=~");
+
+  SAND_COPY(mKernel, "eql?");
+
+  SAND_COPY(mKernel, "id");
+  SAND_COPY(mKernel, "type");
+  SAND_COPY(mKernel, "class");
+
+  SAND_COPY(mKernel, "clone");
+  SAND_COPY(mKernel, "dup");
+  SAND_COPY(mKernel, "initialize_copy");
+
+  SAND_COPY(mKernel, "taint");
+  SAND_COPY(mKernel, "tainted?");
+  SAND_COPY(mKernel, "untaint");
+  SAND_COPY(mKernel, "freeze");
+  SAND_COPY(mKernel, "frozen?");
+
+  SAND_COPY(mKernel, "to_a");
+  SAND_COPY(mKernel, "to_s");
+  SAND_COPY(mKernel, "inspect");
+  SAND_COPY(mKernel, "methods");
+
+  SAND_COPY(mKernel, "singleton_methods");
+  SAND_COPY(mKernel, "protected_methods");
+  SAND_COPY(mKernel, "private_methods");
+  SAND_COPY(mKernel, "public_methods");
+  SAND_COPY(mKernel, "instance_variables");
+  SAND_COPY(mKernel, "instance_variable_get");
+  SAND_COPY(mKernel, "instance_variable_set");
+  SAND_COPY(mKernel, "remove_instance_variable");
+
+  SAND_COPY(mKernel, "instance_of?");
+  SAND_COPY(mKernel, "kind_of?");
+  SAND_COPY(mKernel, "is_a?");
+
+  SAND_COPY(mKernel, "singleton_method_added");
+  SAND_COPY(mKernel, "singleton_method_removed");
+  SAND_COPY(mKernel, "singleton_method_undefined");
+
+/*
+  rb_define_global_function("sprintf", rb_f_sprintf, -1);
+  rb_define_global_function("format", rb_f_sprintf, -1); 
+
+  rb_define_global_function("Integer", rb_f_integer, 1);
+  rb_define_global_function("Float", rb_f_float, 1);
+
+  rb_define_global_function("String", rb_f_string, 1);
+  rb_define_global_function("Array", rb_f_array, 1);
+*/
+
+  kit->cNilClass = sandbox_defclass(kit, "NilClass", kit->cObject);
+  SAND_COPY(cNilClass, "to_i");
+  SAND_COPY(cNilClass, "to_f");
+  SAND_COPY(cNilClass, "to_s");
+  SAND_COPY(cNilClass, "to_a");
+  SAND_COPY(cNilClass, "inspect");
+  SAND_COPY(cNilClass, "&");
+  SAND_COPY(cNilClass, "|");
+  SAND_COPY(cNilClass, "^");
+
+  SAND_COPY(cNilClass, "nil?");
+  rb_undef_alloc_func(kit->cNilClass);
+  rb_undef_method(CLASS_OF(kit->cNilClass), "new");
+  /* rb_define_global_const("NIL", Qnil); */
+
+  kit->cSymbol = sandbox_defclass(kit, "Symbol", kit->cObject);
+  /* rb_define_singleton_method(kit->cSymbol, "all_symbols", rb_sym_all_symbols, 0); */
+  rb_undef_alloc_func(kit->cSymbol);
+  rb_undef_method(CLASS_OF(kit->cSymbol), "new");
+
+  SAND_COPY(cSymbol, "to_i");
+  SAND_COPY(cSymbol, "to_int");
+  SAND_COPY(cSymbol, "inspect");
+  SAND_COPY(cSymbol, "to_s");
+  SAND_COPY(cSymbol, "id2name");
+  SAND_COPY(cSymbol, "to_sym");
+  SAND_COPY(cSymbol, "===");
+
+  SAND_COPY(cModule, "freeze");
+  SAND_COPY(cModule, "===");
+  SAND_COPY(cModule, "==");
+  SAND_COPY(cModule, "<=>");
+  SAND_COPY(cModule, "<");
+  SAND_COPY(cModule, "<=");
+  SAND_COPY(cModule, ">");
+  SAND_COPY(cModule, ">=");
+  SAND_COPY(cModule, "initialize_copy");
+  SAND_COPY(cModule, "to_s");
+  SAND_COPY(cModule, "included_modules");
+  SAND_COPY(cModule, "include?");
+  SAND_COPY(cModule, "name");
+  SAND_COPY(cModule, "ancestors");
+
+  SAND_COPY(cModule, "attr");
+  SAND_COPY(cModule, "attr_reader");
+  SAND_COPY(cModule, "attr_writer");
+  SAND_COPY(cModule, "attr_accessor");
+
+  /* rb_define_alloc_func(kit->cModule, rb_module_s_alloc); */
+  SAND_COPY(cModule, "initialize");
+  SAND_COPY(cModule, "instance_methods");
+  SAND_COPY(cModule, "public_instance_methods");
+  SAND_COPY(cModule, "protected_instance_methods");
+  SAND_COPY(cModule, "private_instance_methods");
+
+  SAND_COPY(cModule, "constants");
+  SAND_COPY(cModule, "const_get");
+  SAND_COPY(cModule, "const_set");
+  SAND_COPY(cModule, "const_defined?");
+  SAND_COPY(cModule, "remove_const");
+  SAND_COPY(cModule, "const_missing");
+  SAND_COPY(cModule, "class_variables");
+  SAND_COPY(cModule, "remove_class_variable");
+  SAND_COPY(cModule, "class_variable_get");
+  SAND_COPY(cModule, "class_variable_set");
+
+  SAND_COPY(cClass, "allocate");
+  SAND_COPY(cClass, "new");
+  SAND_COPY(cClass, "initialize");
+  SAND_COPY(cClass, "initialize_copy");
+  SAND_COPY(cClass, "superclass");
+  /* rb_define_alloc_func(kit->cClass, rb_class_s_alloc); */
+  rb_undef_method(kit->cClass, "extend_object");
+  rb_undef_method(kit->cClass, "append_features");
+
+  kit->cTrueClass = sandbox_defclass(kit, "TrueClass", kit->cObject);
+  SAND_COPY(cTrueClass, "to_s");
+  SAND_COPY(cTrueClass, "&");
+  SAND_COPY(cTrueClass, "|");
+  SAND_COPY(cTrueClass, "^");
+  rb_undef_alloc_func(kit->cTrueClass);
+  rb_undef_method(CLASS_OF(kit->cTrueClass), "new");
+  /* rb_define_global_const("TRUE", Qtrue); */
+
+  kit->cFalseClass = sandbox_defclass(kit, "FalseClass", kit->cObject);
+  SAND_COPY(cFalseClass, "to_s");
+  SAND_COPY(cFalseClass, "&");
+  SAND_COPY(cFalseClass, "|");
+  SAND_COPY(cFalseClass, "^");
+  rb_undef_alloc_func(kit->cFalseClass);
+  rb_undef_method(CLASS_OF(kit->cFalseClass), "new");
+  /* rb_define_global_const("FALSE", Qfalse); */
 }
 
 void Init_sand_table()
