@@ -13,8 +13,6 @@
 extern st_table *rb_class_tbl;
 /* extern st_table *rb_global_tbl; */
 extern VALUE ruby_top_self;
-extern struct FRAME *ruby_frame;
-extern struct SCOPE *ruby_scope;
 
 typedef struct {
   st_table *tbl;
@@ -219,7 +217,6 @@ sandbox_whoa_whoa_whoa(go)
   rb_cClass = norm->cClass;
   rb_mKernel = norm->mKernel;
   ruby_top_self = norm->oMain;
-  /* ruby_frame = frame_save; */
   free(go->norm);
   free(go);
 }
@@ -230,8 +227,6 @@ sandbox_eval( self, str )
 {
   sandkit *kit, *norm;
   go_cart *go;
-  static struct FRAME frame;
-  static struct FRAME *frame_save;
   VALUE val;
   Data_Get_Struct( self, sandkit, kit );
 
@@ -244,7 +239,6 @@ sandbox_eval( self, str )
   norm->cClass = rb_cClass;
   norm->mKernel = rb_mKernel;
   norm->oMain = ruby_top_self;
-  /* frame_save = ruby_frame; */
 
   /* replace everything */
   rb_class_tbl = kit->tbl;
@@ -254,14 +248,14 @@ sandbox_eval( self, str )
   rb_cClass = kit->cClass;
   rb_mKernel = kit->mKernel;
   ruby_top_self = kit->oMain;
-  /* ruby_frame = &frame; */
 
   go = ALLOC(go_cart);
   go->argv = ALLOC(VALUE);
   go->argv[0] = str;
   go->norm = norm;
   go->kit = kit;
-  rb_ensure(sandbox_go_go_go, go, sandbox_whoa_whoa_whoa, go);
+
+  rb_ensure(sandbox_go_go_go, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
 
   return val;
 }
