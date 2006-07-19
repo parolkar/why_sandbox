@@ -27,7 +27,9 @@ typedef struct {
 
   VALUE cArray;
   VALUE cBignum;
+  VALUE mComparable;
   VALUE cData;
+  VALUE mEnumerable;
   VALUE cFalseClass;
   VALUE cFixnum;
   VALUE cFloat;
@@ -35,6 +37,7 @@ typedef struct {
   VALUE cInteger;
   VALUE cNilClass;
   VALUE cNumeric;
+  VALUE mPrecision;
   VALUE cProc;
   VALUE cRange;
   VALUE cRegexp;
@@ -239,6 +242,25 @@ sandbox_whoa_whoa_whoa(go)
   rb_cModule = norm->cModule;
   rb_cClass = norm->cClass;
   rb_mKernel = norm->mKernel;
+  rb_cArray = norm->cArray;
+  rb_cBignum = norm->cBignum;
+  rb_mComparable = norm->mComparable;
+  rb_cData = norm->cData;
+  rb_mEnumerable = norm->mEnumerable;
+  rb_cFalseClass = norm->cFalseClass;
+  rb_cFixnum = norm->cFixnum;
+  rb_cFloat = norm->cFloat;
+  rb_cHash = norm->cHash;
+  rb_cInteger = norm->cInteger;
+  rb_cNilClass = norm->cNilClass;
+  rb_cNumeric = norm->cNumeric;
+  rb_mPrecision = norm->mPrecision;
+  rb_cProc = norm->cProc;
+  rb_cRange = norm->cRange;
+  rb_cRegexp = norm->cRegexp;
+  rb_cString = norm->cString;
+  rb_cSymbol = norm->cSymbol;
+  rb_cTrueClass = norm->cTrueClass;
   ruby_top_self = norm->oMain;
   free(go->norm);
   free(go);
@@ -250,7 +272,6 @@ sandbox_eval( self, str )
 {
   sandkit *kit, *norm;
   go_cart *go;
-  VALUE val;
   Data_Get_Struct( self, sandkit, kit );
 
   /* save everything */
@@ -262,6 +283,25 @@ sandbox_eval( self, str )
   norm->cClass = rb_cClass;
   norm->mKernel = rb_mKernel;
   norm->oMain = ruby_top_self;
+  norm->cArray = rb_cArray;
+  norm->cBignum = rb_cBignum;
+  norm->mComparable = rb_mComparable;
+  norm->cData = rb_cData;
+  norm->mEnumerable = rb_mEnumerable;
+  norm->cFalseClass = rb_cFalseClass;
+  norm->cFixnum = rb_cFixnum;
+  norm->cFloat = rb_cFloat;
+  norm->cHash = rb_cHash;
+  norm->cInteger = rb_cInteger;
+  norm->cNilClass = rb_cNilClass;
+  norm->cNumeric = rb_cNumeric;
+  norm->mPrecision = rb_mPrecision;
+  norm->cProc = rb_cProc;
+  norm->cRange = rb_cRange;
+  norm->cRegexp = rb_cRegexp;
+  norm->cString = rb_cString;
+  norm->cSymbol = rb_cSymbol;
+  norm->cTrueClass = rb_cTrueClass;
 
   /* replace everything */
   rb_class_tbl = kit->tbl;
@@ -270,6 +310,25 @@ sandbox_eval( self, str )
   rb_cModule = kit->cModule;
   rb_cClass = kit->cClass;
   rb_mKernel = kit->mKernel;
+  rb_cArray = kit->cArray;
+  rb_cBignum = kit->cBignum;
+  rb_mComparable = kit->mComparable;
+  rb_cData = kit->cData;
+  rb_mEnumerable = kit->mEnumerable;
+  rb_cFalseClass = kit->cFalseClass;
+  rb_cFixnum = kit->cFixnum;
+  rb_cFloat = kit->cFloat;
+  rb_cHash = kit->cHash;
+  rb_cInteger = kit->cInteger;
+  rb_cNilClass = kit->cNilClass;
+  rb_cNumeric = kit->cNumeric;
+  rb_mPrecision = kit->mPrecision;
+  rb_cProc = kit->cProc;
+  rb_cRange = kit->cRange;
+  rb_cRegexp = kit->cRegexp;
+  rb_cString = kit->cString;
+  rb_cSymbol = kit->cSymbol;
+  rb_cTrueClass = kit->cTrueClass;
   ruby_top_self = kit->oMain;
 
   go = ALLOC(go_cart);
@@ -278,9 +337,25 @@ sandbox_eval( self, str )
   go->norm = norm;
   go->kit = kit;
 
-  rb_ensure(sandbox_go_go_go, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
+  return rb_ensure(sandbox_go_go_go, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
+}
 
-  return val;
+/*
+ * STATIC METHODS I HAD TO COPY OVER
+ */
+static VALUE kit_str_alloc _((VALUE));
+static VALUE
+kit_str_alloc(klass)
+    VALUE klass;
+{
+    NEWOBJ(str, struct RString);
+    OBJSETUP(str, klass, T_STRING);
+
+    str->ptr = 0;
+    str->len = 0;
+    str->aux.capa = 0;
+
+    return (VALUE)str;
 }
 
 void Init_kit(kit)
@@ -460,6 +535,258 @@ void Init_kit(kit)
   rb_undef_alloc_func(kit->cFalseClass);
   rb_undef_method(CLASS_OF(kit->cFalseClass), "new");
   /* rb_define_global_const("FALSE", Qfalse); */
+
+  kit->mEnumerable = sandbox_defmodule(kit, "Enumerable");
+  SAND_COPY(mEnumerable,"to_a");
+  SAND_COPY(mEnumerable,"entries");
+
+  SAND_COPY(mEnumerable,"sort");
+  SAND_COPY(mEnumerable,"sort_by");
+  SAND_COPY(mEnumerable,"grep");
+  SAND_COPY(mEnumerable,"find");
+  SAND_COPY(mEnumerable,"detect");
+  SAND_COPY(mEnumerable,"find_all");
+  SAND_COPY(mEnumerable,"select");
+  SAND_COPY(mEnumerable,"reject");
+  SAND_COPY(mEnumerable,"collect");
+  SAND_COPY(mEnumerable,"map");
+  SAND_COPY(mEnumerable,"inject");
+  SAND_COPY(mEnumerable,"partition");
+  SAND_COPY(mEnumerable,"all?");
+  SAND_COPY(mEnumerable,"any?");
+  SAND_COPY(mEnumerable,"min");
+  SAND_COPY(mEnumerable,"max");
+  SAND_COPY(mEnumerable,"member?");
+  SAND_COPY(mEnumerable,"include?");
+  SAND_COPY(mEnumerable,"each_with_index");
+  SAND_COPY(mEnumerable, "zip");
+
+  kit->mComparable = sandbox_defmodule(kit, "Comparable");
+  SAND_COPY(mComparable, "==");
+  SAND_COPY(mComparable, ">");
+  SAND_COPY(mComparable, ">=");
+  SAND_COPY(mComparable, "<");
+  SAND_COPY(mComparable, "<=");
+  SAND_COPY(mComparable, "between?");
+
+  kit->mPrecision = sandbox_defmodule(kit, "Precision");
+  /* singleton; SAND_COPY(mPrecision, "included"); */
+  SAND_COPY(mPrecision, "prec");
+  SAND_COPY(mPrecision, "prec_i");
+  SAND_COPY(mPrecision, "prec_f");
+
+  /*
+  rb_global_variable((VALUE*)&top_scope);
+  rb_global_variable((VALUE*)&ruby_eval_tree_begin);
+
+  rb_global_variable((VALUE*)&ruby_eval_tree);
+  rb_global_variable((VALUE*)&ruby_dyna_vars);
+
+  rb_define_virtual_variable("$@", errat_getter, errat_setter);
+  rb_define_hooked_variable("$!", &ruby_errinfo, 0, errinfo_setter);
+
+  rb_define_global_function("eval", rb_f_eval, -1);
+  rb_define_global_function("iterator?", rb_f_block_given_p, 0);
+  rb_define_global_function("block_given?", rb_f_block_given_p, 0);
+  rb_define_global_function("method_missing", rb_method_missing, -1);
+  rb_define_global_function("loop", rb_f_loop, 0);
+  */
+
+  SAND_COPY(mKernel, "respond_to?");
+  /*
+  respond_to   = rb_intern("respond_to?");
+  rb_global_variable((VALUE*)&basic_respond_to);
+  basic_respond_to = rb_method_node(rb_cObject, respond_to);
+  
+  rb_define_global_function("raise", rb_f_raise, -1);
+  rb_define_global_function("fail", rb_f_raise, -1);
+
+  rb_define_global_function("caller", rb_f_caller, -1);
+
+  rb_define_global_function("exit", rb_f_exit, -1);
+  rb_define_global_function("abort", rb_f_abort, -1);
+
+  rb_define_global_function("at_exit", rb_f_at_exit, 0);
+
+  rb_define_global_function("catch", rb_f_catch, 1);
+  rb_define_global_function("throw", rb_f_throw, -1);
+  rb_define_global_function("global_variables", rb_f_global_variables, 0);
+  rb_define_global_function("local_variables", rb_f_local_variables, 0);
+  */
+
+  SAND_COPY(mKernel, "send");
+  SAND_COPY(mKernel, "__send__");
+  SAND_COPY(mKernel, "instance_eval");
+
+  SAND_COPY(cModule, "append_features");
+  SAND_COPY(cModule, "extend_object");
+  SAND_COPY(cModule, "include");
+  SAND_COPY(cModule, "public");
+  SAND_COPY(cModule, "protected");
+  SAND_COPY(cModule, "private");
+  SAND_COPY(cModule, "module_function");
+  SAND_COPY(cModule, "method_defined?");
+  SAND_COPY(cModule, "public_method_defined?");
+  SAND_COPY(cModule, "private_method_defined?");
+  SAND_COPY(cModule, "protected_method_defined?");
+  SAND_COPY(cModule, "public_class_method");
+  SAND_COPY(cModule, "private_class_method");
+  SAND_COPY(cModule, "module_eval");
+  SAND_COPY(cModule, "class_eval");
+
+  rb_undef_method(kit->cClass, "module_function");
+
+  SAND_COPY(cModule, "remove_method");
+  SAND_COPY(cModule, "undef_method");
+  SAND_COPY(cModule, "alias_method");
+  SAND_COPY(cModule, "define_method");
+
+  /*
+  rb_define_singleton_method(rb_cModule, "nesting", rb_mod_nesting, 0);
+  rb_define_singleton_method(rb_cModule, "constants", rb_mod_s_constants, 0);
+
+  rb_define_singleton_method(ruby_top_self, "include", top_include, -1);
+  rb_define_singleton_method(ruby_top_self, "public", top_public, -1);
+  rb_define_singleton_method(ruby_top_self, "private", top_private, -1);
+  */
+
+  SAND_COPY(mKernel, "extend");
+
+  /*
+  rb_define_global_function("trace_var", rb_f_trace_var, -1);
+  rb_define_global_function("untrace_var", rb_f_untrace_var, -1);
+
+  rb_define_global_function("set_trace_func", set_trace_func, 1);
+  rb_global_variable(&trace_func);
+
+  rb_define_virtual_variable("$SAFE", safe_getter, safe_setter);
+  */
+
+  kit->cString  = sandbox_defclass(kit, "String", kit->cObject);
+  rb_include_module(kit->cString, kit->mComparable);
+  rb_include_module(kit->cString, kit->mEnumerable);
+  rb_define_alloc_func(kit->cString, kit_str_alloc);
+  SAND_COPY(cString, "initialize");
+  SAND_COPY(cString, "initialize_copy");
+  SAND_COPY(cString, "<=>");
+  SAND_COPY(cString, "==");
+  SAND_COPY(cString, "eql?");
+  SAND_COPY(cString, "hash");
+  SAND_COPY(cString, "casecmp");
+  SAND_COPY(cString, "+");
+  SAND_COPY(cString, "*");
+  SAND_COPY(cString, "%");
+  SAND_COPY(cString, "[]");
+  SAND_COPY(cString, "[]=");
+  SAND_COPY(cString, "insert");
+  SAND_COPY(cString, "length");
+  SAND_COPY(cString, "size");
+  SAND_COPY(cString, "empty?");
+  SAND_COPY(cString, "=~");
+  SAND_COPY(cString, "match");
+  SAND_COPY(cString, "succ");
+  SAND_COPY(cString, "succ!");
+  SAND_COPY(cString, "next");
+  SAND_COPY(cString, "next!");
+  SAND_COPY(cString, "upto");
+  SAND_COPY(cString, "index");
+  SAND_COPY(cString, "rindex");
+  SAND_COPY(cString, "replace");
+
+  SAND_COPY(cString, "to_i");
+  SAND_COPY(cString, "to_f");
+  SAND_COPY(cString, "to_s");
+  SAND_COPY(cString, "to_str");
+  SAND_COPY(cString, "inspect");
+  SAND_COPY(cString, "dump");
+
+  SAND_COPY(cString, "upcase");
+  SAND_COPY(cString, "downcase");
+  SAND_COPY(cString, "capitalize");
+  SAND_COPY(cString, "swapcase");
+
+  SAND_COPY(cString, "upcase!");
+  SAND_COPY(cString, "downcase!");
+  SAND_COPY(cString, "capitalize!");
+  SAND_COPY(cString, "swapcase!");
+
+  SAND_COPY(cString, "hex");
+  SAND_COPY(cString, "oct");
+  SAND_COPY(cString, "split");
+  SAND_COPY(cString, "reverse");
+  SAND_COPY(cString, "reverse!");
+  SAND_COPY(cString, "concat");
+  SAND_COPY(cString, "<<");
+  SAND_COPY(cString, "crypt");
+  SAND_COPY(cString, "intern");
+  SAND_COPY(cString, "to_sym");
+
+  SAND_COPY(cString, "include?");
+
+  SAND_COPY(cString, "scan");
+
+  SAND_COPY(cString, "ljust");
+  SAND_COPY(cString, "rjust");
+  SAND_COPY(cString, "center");
+
+  SAND_COPY(cString, "sub");
+  SAND_COPY(cString, "gsub");
+  SAND_COPY(cString, "chop");
+  SAND_COPY(cString, "chomp");
+  SAND_COPY(cString, "strip");
+  SAND_COPY(cString, "lstrip");
+  SAND_COPY(cString, "rstrip");
+
+  SAND_COPY(cString, "sub!");
+  SAND_COPY(cString, "gsub!");
+  SAND_COPY(cString, "chop!");
+  SAND_COPY(cString, "chomp!");
+  SAND_COPY(cString, "strip!");
+  SAND_COPY(cString, "lstrip!");
+  SAND_COPY(cString, "rstrip!");
+
+  SAND_COPY(cString, "tr");
+  SAND_COPY(cString, "tr_s");
+  SAND_COPY(cString, "delete");
+  SAND_COPY(cString, "squeeze");
+  SAND_COPY(cString, "count");
+
+  SAND_COPY(cString, "tr!");
+  SAND_COPY(cString, "tr_s!");
+  SAND_COPY(cString, "delete!");
+  SAND_COPY(cString, "squeeze!");
+
+  SAND_COPY(cString, "each_line");
+  SAND_COPY(cString, "each");
+  SAND_COPY(cString, "each_byte");
+
+  SAND_COPY(cString, "sum");
+
+  /*
+  rb_define_global_function("sub", rb_f_sub, -1);
+  rb_define_global_function("gsub", rb_f_gsub, -1);
+
+  rb_define_global_function("sub!", rb_f_sub_bang, -1);
+  rb_define_global_function("gsub!", rb_f_gsub_bang, -1);
+
+  rb_define_global_function("chop", rb_f_chop, 0);
+  rb_define_global_function("chop!", rb_f_chop_bang, 0);
+
+  rb_define_global_function("chomp", rb_f_chomp, -1);
+  rb_define_global_function("chomp!", rb_f_chomp_bang, -1);
+
+  rb_define_global_function("split", rb_f_split, -1);
+  rb_define_global_function("scan", rb_f_scan, 1);
+  */
+
+  SAND_COPY(cString, "slice");
+  SAND_COPY(cString, "slice!");
+
+  /*
+  rb_fs = Qnil;
+  rb_define_variable("$;", &rb_fs);
+  rb_define_variable("$-F", &rb_fs);
+  */
 }
 
 void Init_sand_table()
