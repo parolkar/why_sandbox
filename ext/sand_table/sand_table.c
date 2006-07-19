@@ -11,7 +11,7 @@
 #include <env.h>
 
 extern st_table *rb_class_tbl;
-extern st_table *rb_global_tbl;
+/* extern st_table *rb_global_tbl; */
 extern VALUE ruby_top_self;
 extern struct FRAME *ruby_frame;
 extern struct SCOPE *ruby_scope;
@@ -201,7 +201,7 @@ sandbox_eval( self, str )
   static struct FRAME frame;
   static struct FRAME *frame_save;
   VALUE val, obj, mod, klass, kernel, topself, *argv;
-  st_table *current_tbl = rb_class_tbl, *global_tbl = rb_global_tbl;
+  st_table *current_tbl = rb_class_tbl; /* *global_tbl = rb_global_tbl; */
   Data_Get_Struct( self, sandkit, kit );
 
   /* save everything */
@@ -214,7 +214,7 @@ sandbox_eval( self, str )
 
   /* replace everything */
   rb_class_tbl = kit->tbl;
-  rb_global_tbl = kit->globals;
+  /* rb_global_tbl = kit->globals; */
   rb_cObject = kit->cObject;
   rb_cModule = kit->cModule;
   rb_cClass = kit->cClass;
@@ -233,7 +233,7 @@ sandbox_eval( self, str )
 
   /* okay, move it all back */
   rb_class_tbl = current_tbl;
-  rb_global_tbl = global_tbl;
+  /* rb_global_tbl = global_tbl; */
   rb_cObject = obj;
   rb_cModule = mod;
   rb_cClass = klass;
@@ -246,7 +246,7 @@ sandbox_eval( self, str )
 
 void Init_sand_table()
 {
-  VALUE cSandbox = rb_define_class("Sand", rb_cObject);
+  VALUE cSandbox = rb_define_class("Sandbox", rb_cObject);
   rb_define_alloc_func( cSandbox, sandbox_alloc );
   rb_define_method( cSandbox, "eval", sandbox_eval, 1 );
 }
