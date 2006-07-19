@@ -7,6 +7,7 @@
  * Copyright (C) 2006 why the lucky stiff
  */
 #include <ruby.h>
+#include <rubysig.h>
 #include <st.h>
 #include <env.h>
 #include <node.h>
@@ -36,6 +37,7 @@ typedef struct {
   VALUE cFloat;
   VALUE cHash;
   VALUE cInteger;
+  VALUE cMatch;
   VALUE cNilClass;
   VALUE cNumeric;
   VALUE mPrecision;
@@ -43,6 +45,7 @@ typedef struct {
   VALUE cRange;
   VALUE cRegexp;
   VALUE cString;
+  VALUE cStruct;
   VALUE cSymbol;
   VALUE cTrueClass;
 
@@ -55,6 +58,7 @@ typedef struct {
   VALUE eEOFError;
   VALUE eIndexError;
   VALUE eRangeError;
+  /* VALUE eRegexpError; */
   VALUE eIOError;
   VALUE eRuntimeError;
   VALUE eSecurityError;
@@ -80,10 +84,59 @@ mark_sandbox(kit)
 {
   rb_mark_tbl(kit->tbl);
   rb_mark_tbl(kit->globals);
-  rb_gc_mark(kit->cObject);
-  rb_gc_mark(kit->cModule);
-  rb_gc_mark(kit->cClass);
-  rb_gc_mark(kit->mKernel);
+  rb_gc_mark_maybe(kit->cObject);
+  rb_gc_mark_maybe(kit->cModule);
+  rb_gc_mark_maybe(kit->cClass);
+  rb_gc_mark_maybe(kit->mKernel);
+  rb_gc_mark_maybe(kit->oMain);
+
+  rb_gc_mark_maybe(kit->cArray);
+  rb_gc_mark_maybe(kit->cBignum);
+  rb_gc_mark_maybe(kit->mComparable);
+  rb_gc_mark_maybe(kit->cData);
+  rb_gc_mark_maybe(kit->mEnumerable);
+  rb_gc_mark_maybe(kit->eException);
+  rb_gc_mark_maybe(kit->cFalseClass);
+  rb_gc_mark_maybe(kit->cFixnum);
+  rb_gc_mark_maybe(kit->cFloat);
+  rb_gc_mark_maybe(kit->cHash);
+  rb_gc_mark_maybe(kit->cInteger);
+  /* rb_gc_mark_maybe(kit->cMatch); */
+  rb_gc_mark_maybe(kit->cNilClass);
+  rb_gc_mark_maybe(kit->cNumeric);
+  rb_gc_mark_maybe(kit->mPrecision);
+  rb_gc_mark_maybe(kit->cProc);
+  rb_gc_mark_maybe(kit->cRange);
+  rb_gc_mark_maybe(kit->cRegexp);
+  rb_gc_mark_maybe(kit->cString);
+  rb_gc_mark_maybe(kit->cStruct);
+  rb_gc_mark_maybe(kit->cSymbol);
+  rb_gc_mark_maybe(kit->cTrueClass);
+
+  rb_gc_mark_maybe(kit->eStandardError);
+  rb_gc_mark_maybe(kit->eSystemExit);
+  rb_gc_mark_maybe(kit->eInterrupt);
+  rb_gc_mark_maybe(kit->eSignal);
+  rb_gc_mark_maybe(kit->eFatal);
+  rb_gc_mark_maybe(kit->eArgError);
+  rb_gc_mark_maybe(kit->eEOFError);
+  rb_gc_mark_maybe(kit->eIndexError);
+  rb_gc_mark_maybe(kit->eRangeError);
+  rb_gc_mark_maybe(kit->eIOError);
+  rb_gc_mark_maybe(kit->eRuntimeError);
+  rb_gc_mark_maybe(kit->eSecurityError);
+  rb_gc_mark_maybe(kit->eSystemCallError);
+  rb_gc_mark_maybe(kit->eTypeError);
+  rb_gc_mark_maybe(kit->eZeroDivError);
+  rb_gc_mark_maybe(kit->eNotImpError);
+  rb_gc_mark_maybe(kit->eNoMemError);
+  rb_gc_mark_maybe(kit->eNoMethodError);
+  rb_gc_mark_maybe(kit->eFloatDomainError);
+ 
+  rb_gc_mark_maybe(kit->eScriptError);
+  rb_gc_mark_maybe(kit->eNameError);
+  rb_gc_mark_maybe(kit->eSyntaxError);
+  rb_gc_mark_maybe(kit->eLoadError);
 }
 
 void
@@ -171,6 +224,43 @@ sandbox_metaclass(kit, obj, super)
   return klass;
 }
 
+VALUE
+sandbox_singleton_class(kit, obj)
+  sandkit *kit;
+  VALUE obj;
+{
+  VALUE klass;
+
+  if (FIXNUM_P(obj) || SYMBOL_P(obj)) {
+    rb_raise(rb_eTypeError, "can't define singleton");
+  }
+  if (rb_special_const_p(obj)) {
+    SPECIAL_SINGLETON(Qnil, kit->cNilClass);
+    SPECIAL_SINGLETON(Qfalse, kit->cFalseClass);
+    SPECIAL_SINGLETON(Qtrue, kit->cTrueClass);
+    rb_bug("unknown immediate %ld", obj);
+  }
+
+  DEFER_INTS;
+  if (FL_TEST(RBASIC(obj)->klass, FL_SINGLETON) &&
+  rb_iv_get(RBASIC(obj)->klass, "__attached__") == obj) {
+    klass = RBASIC(obj)->klass;
+  }
+  else {
+    klass = sandbox_metaclass(kit, obj, RBASIC(obj)->klass);
+  }
+  if (OBJ_TAINTED(obj)) {
+    OBJ_TAINT(klass);
+  }
+  else {
+    FL_UNSET(klass, FL_TAINT);
+  }
+  if (OBJ_FROZEN(obj)) OBJ_FREEZE(klass);
+  ALLOW_INTS;
+  
+  return klass;
+}
+
 static VALUE
 sandbox_defclass(kit, name, super)
   sandkit *kit;
@@ -210,6 +300,10 @@ sandbox_defmodule(kit, name)
 
 #define SAND_COPY(K, M) sandbox_copy_method(kit->K, rb_intern(M), rb_##K);
 #define SAND_COPY_ALLOC(K) sandbox_copy_method(CLASS_OF(kit->K), ID_ALLOCATOR, CLASS_OF(rb_##K));
+#define SAND_COPY_S(K, M) sandbox_copy_method(sandbox_singleton_class(kit, kit->K), rb_intern(M), rb_singleton_class(rb_##K));
+#define SAND_COPY_MAIN(M) sandbox_copy_method(sandbox_singleton_class(kit, kit->oMain), rb_intern(M), rb_singleton_class(ruby_top_self));
+#define SAND_COPY_CONST(K, M) rb_const_set(kit->K, rb_intern(M), rb_const_get(rb_##K, rb_intern(M)));
+#define SAND_COPY_KERNEL(M) SAND_COPY(mKernel, M); SAND_COPY_S(mKernel, M)
 
 void
 sandbox_copy_method(klass, def, oklass)
@@ -278,6 +372,7 @@ sandbox_whoa_whoa_whoa(go)
   rb_cFloat = norm->cFloat;
   rb_cHash = norm->cHash;
   rb_cInteger = norm->cInteger;
+  /* rb_cMatch = norm->cMatch; */
   rb_cNilClass = norm->cNilClass;
   rb_cNumeric = norm->cNumeric;
   rb_mPrecision = norm->mPrecision;
@@ -285,6 +380,7 @@ sandbox_whoa_whoa_whoa(go)
   rb_cRange = norm->cRange;
   rb_cRegexp = norm->cRegexp;
   rb_cString = norm->cString;
+  rb_cStruct = norm->cStruct;
   rb_cSymbol = norm->cSymbol;
   rb_cTrueClass = norm->cTrueClass;
   rb_eException = norm->eException;
@@ -297,6 +393,7 @@ sandbox_whoa_whoa_whoa(go)
   rb_eEOFError = norm->eEOFError;
   rb_eIndexError = norm->eIndexError;
   rb_eRangeError = norm->eRangeError;
+  /* rb_eRegexpError = norm->eRegexpError; */
   rb_eIOError = norm->eIOError;
   rb_eRuntimeError = norm->eRuntimeError;
   rb_eSecurityError = norm->eSecurityError;
@@ -343,6 +440,7 @@ sandbox_eval( self, str )
   norm->cFloat = rb_cFloat;
   norm->cHash = rb_cHash;
   norm->cInteger = rb_cInteger;
+  /* norm->cMatch = rb_cMatch; */
   norm->cNilClass = rb_cNilClass;
   norm->cNumeric = rb_cNumeric;
   norm->mPrecision = rb_mPrecision;
@@ -350,6 +448,7 @@ sandbox_eval( self, str )
   norm->cRange = rb_cRange;
   norm->cRegexp = rb_cRegexp;
   norm->cString = rb_cString;
+  norm->cStruct = rb_cStruct;
   norm->cSymbol = rb_cSymbol;
   norm->cTrueClass = rb_cTrueClass;
   norm->eException = rb_eException;
@@ -362,6 +461,7 @@ sandbox_eval( self, str )
   norm->eEOFError = rb_eEOFError;
   norm->eIndexError = rb_eIndexError;
   norm->eRangeError = rb_eRangeError;
+  /* norm->eRegexpError = rb_eRegexpError; */
   norm->eIOError = rb_eIOError;
   norm->eRuntimeError = rb_eRuntimeError;
   norm->eSecurityError = rb_eSecurityError;
@@ -394,6 +494,7 @@ sandbox_eval( self, str )
   rb_cFloat = kit->cFloat;
   rb_cHash = kit->cHash;
   rb_cInteger = kit->cInteger;
+  /* rb_cMatch = kit->cMatch; */
   rb_cNilClass = kit->cNilClass;
   rb_cNumeric = kit->cNumeric;
   rb_mPrecision = kit->mPrecision;
@@ -401,6 +502,7 @@ sandbox_eval( self, str )
   rb_cRange = kit->cRange;
   rb_cRegexp = kit->cRegexp;
   rb_cString = kit->cString;
+  rb_cStruct = kit->cStruct;
   rb_cSymbol = kit->cSymbol;
   rb_cTrueClass = kit->cTrueClass;
   rb_eException = kit->eException;
@@ -413,6 +515,7 @@ sandbox_eval( self, str )
   rb_eEOFError = kit->eEOFError;
   rb_eIndexError = kit->eIndexError;
   rb_eRangeError = kit->eRangeError;
+  /* rb_eRegexpError = kit->eRegexpError; */
   rb_eIOError = kit->eIOError;
   rb_eRuntimeError = kit->eRuntimeError;
   rb_eSecurityError = kit->eSecurityError;
@@ -458,7 +561,6 @@ void Init_kit(kit)
   kit->mKernel = sandbox_defmodule(kit, "Kernel");
   rb_include_module(kit->cObject, kit->mKernel);
   rb_define_alloc_func(kit->cObject, sandbox_alloc_obj);
-  kit->oMain = rb_obj_alloc(kit->cObject);
 
   rb_define_private_method(kit->cModule, "method_added", sandbox_dummy, 1);
   rb_define_private_method(kit->cObject, "initialize", sandbox_dummy, 0);
@@ -512,16 +614,14 @@ void Init_kit(kit)
   SAND_COPY(mKernel, "singleton_method_removed");
   SAND_COPY(mKernel, "singleton_method_undefined");
 
-/*
-  rb_define_global_function("sprintf", rb_f_sprintf, -1);
-  rb_define_global_function("format", rb_f_sprintf, -1); 
+  SAND_COPY_KERNEL("sprintf");
+  SAND_COPY_KERNEL("format"); 
 
-  rb_define_global_function("Integer", rb_f_integer, 1);
-  rb_define_global_function("Float", rb_f_float, 1);
+  SAND_COPY_KERNEL("Integer");
+  SAND_COPY_KERNEL("Float");
 
-  rb_define_global_function("String", rb_f_string, 1);
-  rb_define_global_function("Array", rb_f_array, 1);
-*/
+  SAND_COPY_KERNEL("String");
+  SAND_COPY_KERNEL("Array");
 
   kit->cNilClass = sandbox_defclass(kit, "NilClass", kit->cObject);
   SAND_COPY(cNilClass, "to_i");
@@ -536,10 +636,10 @@ void Init_kit(kit)
   SAND_COPY(cNilClass, "nil?");
   rb_undef_alloc_func(kit->cNilClass);
   rb_undef_method(CLASS_OF(kit->cNilClass), "new");
-  /* rb_define_global_const("NIL", Qnil); */
+  SAND_COPY_CONST(cObject, "NIL");
 
   kit->cSymbol = sandbox_defclass(kit, "Symbol", kit->cObject);
-  /* rb_define_singleton_method(kit->cSymbol, "all_symbols", rb_sym_all_symbols, 0); */
+  SAND_COPY_S(cSymbol, "all_symbols");
   rb_undef_alloc_func(kit->cSymbol);
   rb_undef_method(CLASS_OF(kit->cSymbol), "new");
 
@@ -598,6 +698,13 @@ void Init_kit(kit)
   rb_undef_method(kit->cClass, "extend_object");
   rb_undef_method(kit->cClass, "append_features");
 
+  kit->cData = sandbox_defclass(kit, "Data", kit->cObject);
+  rb_undef_alloc_func(kit->cData);
+
+  /* rb_global_variable(&ruby_top_self); */
+  kit->oMain = rb_obj_alloc(kit->cObject);
+  SAND_COPY_MAIN("to_s");
+
   kit->cTrueClass = sandbox_defclass(kit, "TrueClass", kit->cObject);
   SAND_COPY(cTrueClass, "to_s");
   SAND_COPY(cTrueClass, "&");
@@ -605,7 +712,7 @@ void Init_kit(kit)
   SAND_COPY(cTrueClass, "^");
   rb_undef_alloc_func(kit->cTrueClass);
   rb_undef_method(CLASS_OF(kit->cTrueClass), "new");
-  /* rb_define_global_const("TRUE", Qtrue); */
+  SAND_COPY_CONST(cObject, "TRUE");
 
   kit->cFalseClass = sandbox_defclass(kit, "FalseClass", kit->cObject);
   SAND_COPY(cFalseClass, "to_s");
@@ -614,7 +721,7 @@ void Init_kit(kit)
   SAND_COPY(cFalseClass, "^");
   rb_undef_alloc_func(kit->cFalseClass);
   rb_undef_method(CLASS_OF(kit->cFalseClass), "new");
-  /* rb_define_global_const("FALSE", Qfalse); */
+  SAND_COPY_CONST(cObject, "FALSE");
 
   kit->mEnumerable = sandbox_defmodule(kit, "Enumerable");
   SAND_COPY(mEnumerable,"to_a");
@@ -650,7 +757,7 @@ void Init_kit(kit)
   SAND_COPY(mComparable, "between?");
 
   kit->mPrecision = sandbox_defmodule(kit, "Precision");
-  /* singleton; SAND_COPY(mPrecision, "included"); */
+  SAND_COPY_S(mPrecision, "included");
   SAND_COPY(mPrecision, "prec");
   SAND_COPY(mPrecision, "prec_i");
   SAND_COPY(mPrecision, "prec_f");
@@ -664,35 +771,35 @@ void Init_kit(kit)
 
   rb_define_virtual_variable("$@", errat_getter, errat_setter);
   rb_define_hooked_variable("$!", &ruby_errinfo, 0, errinfo_setter);
-
-  rb_define_global_function("eval", rb_f_eval, -1);
-  rb_define_global_function("iterator?", rb_f_block_given_p, 0);
-  rb_define_global_function("block_given?", rb_f_block_given_p, 0);
-  rb_define_global_function("method_missing", rb_method_missing, -1);
-  rb_define_global_function("loop", rb_f_loop, 0);
   */
+
+  SAND_COPY_KERNEL("eval");
+  SAND_COPY_KERNEL("iterator?");
+  SAND_COPY_KERNEL("block_given?");
+  SAND_COPY_KERNEL("method_missing");
+  SAND_COPY_KERNEL("loop");
 
   SAND_COPY(mKernel, "respond_to?");
   /*
   respond_to   = rb_intern("respond_to?");
   rb_global_variable((VALUE*)&basic_respond_to);
   basic_respond_to = rb_method_node(rb_cObject, respond_to);
-  
-  rb_define_global_function("raise", rb_f_raise, -1);
-  rb_define_global_function("fail", rb_f_raise, -1);
-
-  rb_define_global_function("caller", rb_f_caller, -1);
-
-  rb_define_global_function("exit", rb_f_exit, -1);
-  rb_define_global_function("abort", rb_f_abort, -1);
-
-  rb_define_global_function("at_exit", rb_f_at_exit, 0);
-
-  rb_define_global_function("catch", rb_f_catch, 1);
-  rb_define_global_function("throw", rb_f_throw, -1);
-  rb_define_global_function("global_variables", rb_f_global_variables, 0);
-  rb_define_global_function("local_variables", rb_f_local_variables, 0);
   */
+  
+  SAND_COPY_KERNEL("raise");
+  SAND_COPY_KERNEL("fail");
+
+  SAND_COPY_KERNEL("caller");
+
+  SAND_COPY_KERNEL("exit");
+  SAND_COPY_KERNEL("abort");
+
+  SAND_COPY_KERNEL("at_exit");
+
+  SAND_COPY_KERNEL("catch");
+  SAND_COPY_KERNEL("throw");
+  SAND_COPY_KERNEL("global_variables");
+  SAND_COPY_KERNEL("local_variables");
 
   SAND_COPY(mKernel, "send");
   SAND_COPY(mKernel, "__send__");
@@ -721,14 +828,12 @@ void Init_kit(kit)
   SAND_COPY(cModule, "alias_method");
   SAND_COPY(cModule, "define_method");
 
-  /*
-  rb_define_singleton_method(rb_cModule, "nesting", rb_mod_nesting, 0);
-  rb_define_singleton_method(rb_cModule, "constants", rb_mod_s_constants, 0);
+  SAND_COPY_S(cModule, "nesting");
+  SAND_COPY_S(cModule, "constants");
 
-  rb_define_singleton_method(ruby_top_self, "include", top_include, -1);
-  rb_define_singleton_method(ruby_top_self, "public", top_public, -1);
-  rb_define_singleton_method(ruby_top_self, "private", top_private, -1);
-  */
+  SAND_COPY_MAIN("include");
+  SAND_COPY_MAIN("public");
+  SAND_COPY_MAIN("private");
 
   SAND_COPY(mKernel, "extend");
 
@@ -842,22 +947,16 @@ void Init_kit(kit)
 
   SAND_COPY(cString, "sum");
 
-  /*
-  rb_define_global_function("sub", rb_f_sub, -1);
-  rb_define_global_function("gsub", rb_f_gsub, -1);
-
-  rb_define_global_function("sub!", rb_f_sub_bang, -1);
-  rb_define_global_function("gsub!", rb_f_gsub_bang, -1);
-
-  rb_define_global_function("chop", rb_f_chop, 0);
-  rb_define_global_function("chop!", rb_f_chop_bang, 0);
-
-  rb_define_global_function("chomp", rb_f_chomp, -1);
-  rb_define_global_function("chomp!", rb_f_chomp_bang, -1);
-
-  rb_define_global_function("split", rb_f_split, -1);
-  rb_define_global_function("scan", rb_f_scan, 1);
-  */
+  SAND_COPY_KERNEL("sub");
+  SAND_COPY_KERNEL("gsub");
+  SAND_COPY_KERNEL("sub!");
+  SAND_COPY_KERNEL("gsub!");
+  SAND_COPY_KERNEL("chop");
+  SAND_COPY_KERNEL("chop!");
+  SAND_COPY_KERNEL("chomp");
+  SAND_COPY_KERNEL("chomp!");
+  SAND_COPY_KERNEL("split");
+  SAND_COPY_KERNEL("scan");
 
   SAND_COPY(cString, "slice");
   SAND_COPY(cString, "slice!");
@@ -869,7 +968,7 @@ void Init_kit(kit)
   */
 
   kit->eException = sandbox_defclass(kit, "Exception", kit->cObject);
-  /* rb_define_singleton_method(kit->eException, "exception", rb_class_new_instance, -1); */
+  SAND_COPY_S(eException, "exception");
   SAND_COPY(eException, "exception");
   SAND_COPY(eException, "initialize");
   SAND_COPY(eException, "to_s");
@@ -962,14 +1061,14 @@ void Init_kit(kit)
   SAND_COPY(cNumeric, "step");
 
   kit->cInteger = sandbox_defclass(kit, "Integer", kit->cNumeric);
-  rb_undef_alloc_func(rb_cInteger);
-  rb_undef_method(CLASS_OF(rb_cInteger), "new");
+  rb_undef_alloc_func(kit->cInteger);
+  rb_undef_method(CLASS_OF(kit->cInteger), "new");
 
   SAND_COPY(cInteger, "integer?");
   SAND_COPY(cInteger, "upto");
   SAND_COPY(cInteger, "downto");
   SAND_COPY(cInteger, "times");
-  rb_include_module(rb_cInteger, kit->mPrecision);
+  rb_include_module(kit->cInteger, kit->mPrecision);
   SAND_COPY(cInteger, "succ");
   SAND_COPY(cInteger, "next");
   SAND_COPY(cInteger, "chr");
@@ -982,10 +1081,8 @@ void Init_kit(kit)
 
   kit->cFixnum = sandbox_defclass(kit, "Fixnum", kit->cInteger);
   rb_include_module(kit->cFixnum, kit->mPrecision);
-  /*
-  rb_define_singleton_method(kit->cFixnum, "induced_from", rb_fix_induced_from, 1);
-  rb_define_singleton_method(kit->cInteger, "induced_from", rb_int_induced_from, 1);
-  */
+  SAND_COPY_S(cFixnum, "induced_from");
+  SAND_COPY_S(cInteger, "induced_from");
 
   SAND_COPY(cFixnum, "to_s");
 
@@ -1031,22 +1128,20 @@ void Init_kit(kit)
   rb_undef_alloc_func(kit->cFloat);
   rb_undef_method(CLASS_OF(kit->cFloat), "new");
 
-  /* rb_define_singleton_method(kit->cFloat, "induced_from", rb_flo_induced_from, 1); */
+  SAND_COPY_S(cFloat, "induced_from");
   rb_include_module(kit->cFloat, kit->mPrecision);
 
-  /*
-  rb_define_const(kit->cFloat, "ROUNDS", INT2FIX(FLT_ROUNDS));
-  rb_define_const(kit->cFloat, "RADIX", INT2FIX(FLT_RADIX));
-  rb_define_const(kit->cFloat, "MANT_DIG", INT2FIX(DBL_MANT_DIG));
-  rb_define_const(kit->cFloat, "DIG", INT2FIX(DBL_DIG));
-  rb_define_const(kit->cFloat, "MIN_EXP", INT2FIX(DBL_MIN_EXP));
-  rb_define_const(kit->cFloat, "MAX_EXP", INT2FIX(DBL_MAX_EXP));
-  rb_define_const(kit->cFloat, "MIN_10_EXP", INT2FIX(DBL_MIN_10_EXP));
-  rb_define_const(kit->cFloat, "MAX_10_EXP", INT2FIX(DBL_MAX_10_EXP));
-  rb_define_const(kit->cFloat, "MIN", rb_float_new(DBL_MIN));
-  rb_define_const(kit->cFloat, "MAX", rb_float_new(DBL_MAX));
-  rb_define_const(kit->cFloat, "EPSILON", rb_float_new(DBL_EPSILON));
-  */
+  SAND_COPY_CONST(cFloat, "ROUNDS");
+  SAND_COPY_CONST(cFloat, "RADIX");
+  SAND_COPY_CONST(cFloat, "MANT_DIG");
+  SAND_COPY_CONST(cFloat, "DIG");
+  SAND_COPY_CONST(cFloat, "MIN_EXP");
+  SAND_COPY_CONST(cFloat, "MAX_EXP");
+  SAND_COPY_CONST(cFloat, "MIN_10_EXP");
+  SAND_COPY_CONST(cFloat, "MAX_10_EXP");
+  SAND_COPY_CONST(cFloat, "MIN");
+  SAND_COPY_CONST(cFloat, "MAX");
+  SAND_COPY_CONST(cFloat, "EPSILON");
 
   SAND_COPY(cFloat, "to_s");
   SAND_COPY(cFloat, "coerce");
@@ -1082,11 +1177,43 @@ void Init_kit(kit)
   SAND_COPY(cFloat, "infinite?");
   SAND_COPY(cFloat, "finite?");
 
+  kit->cBignum = sandbox_defclass(kit, "Bignum", kit->cInteger);
+
+  SAND_COPY(cBignum, "to_s");
+  SAND_COPY(cBignum, "coerce");
+  SAND_COPY(cBignum, "-@");
+  SAND_COPY(cBignum, "+");
+  SAND_COPY(cBignum, "-");
+  SAND_COPY(cBignum, "*");
+  SAND_COPY(cBignum, "/");
+  SAND_COPY(cBignum, "%");
+  SAND_COPY(cBignum, "div");
+  SAND_COPY(cBignum, "divmod");
+  SAND_COPY(cBignum, "modulo");
+  SAND_COPY(cBignum, "remainder");
+  SAND_COPY(cBignum, "quo");
+  SAND_COPY(cBignum, "**");
+  SAND_COPY(cBignum, "&");
+  SAND_COPY(cBignum, "|");
+  SAND_COPY(cBignum, "^");
+  SAND_COPY(cBignum, "~");
+  SAND_COPY(cBignum, "<<");
+  SAND_COPY(cBignum, ">>");
+  SAND_COPY(cBignum, "[]");
+
+  SAND_COPY(cBignum, "<=>");
+  SAND_COPY(cBignum, "==");
+  SAND_COPY(cBignum, "eql?");
+  SAND_COPY(cBignum, "hash");
+  SAND_COPY(cBignum, "to_f");
+  SAND_COPY(cBignum, "abs");
+  SAND_COPY(cBignum, "size");
+
   kit->cArray  = sandbox_defclass(kit, "Array", kit->cObject);
   rb_include_module(kit->cArray, kit->mEnumerable);
 
   SAND_COPY_ALLOC(cArray);
-  /* rb_define_singleton_method(rb_cArray, "[]", rb_ary_s_create, -1); */
+  SAND_COPY_S(cArray, "[]");
   SAND_COPY(cArray, "initialize");
   SAND_COPY(cArray, "initialize_copy");
 
@@ -1172,7 +1299,7 @@ void Init_kit(kit)
   rb_include_module(kit->cHash, kit->mEnumerable);
 
   SAND_COPY_ALLOC(cHash);
-  /* rb_define_singleton_method(rb_cHash, "[]", rb_hash_s_create, -1); */
+  SAND_COPY_S(cHash, "[]");
   SAND_COPY(cHash,"initialize");
   SAND_COPY(cHash,"initialize_copy");
   SAND_COPY(cHash,"rehash");
@@ -1226,6 +1353,127 @@ void Init_kit(kit)
   SAND_COPY(cHash,"has_value?");
   SAND_COPY(cHash,"key?");
   SAND_COPY(cHash,"value?");
+
+  kit->cStruct = sandbox_defclass(kit, "Struct", kit->cObject);
+  rb_include_module(kit->cStruct, kit->mEnumerable);
+
+  rb_undef_alloc_func(kit->cStruct);
+  SAND_COPY_S(cStruct, "new");
+
+  SAND_COPY(cStruct, "initialize");
+  SAND_COPY(cStruct, "initialize_copy");
+
+  SAND_COPY(cStruct, "==");
+  SAND_COPY(cStruct, "eql?");
+  SAND_COPY(cStruct, "hash");
+
+  SAND_COPY(cStruct, "to_s");
+  SAND_COPY(cStruct, "inspect");
+  SAND_COPY(cStruct, "to_a");
+  SAND_COPY(cStruct, "values");
+  SAND_COPY(cStruct, "size");
+  SAND_COPY(cStruct, "length");
+
+  SAND_COPY(cStruct, "each");
+  SAND_COPY(cStruct, "each_pair");
+  SAND_COPY(cStruct, "[]");
+  SAND_COPY(cStruct, "[]=");
+  SAND_COPY(cStruct, "select");
+  SAND_COPY(cStruct, "values_at");
+
+  SAND_COPY(cStruct, "members");
+
+  /*
+  kit->eRegexpError = sandbox_defclass(kit, "RegexpError", kit->eStandardError);
+
+  rb_define_virtual_variable("$~", match_getter, match_setter);
+  rb_define_virtual_variable("$&", last_match_getter, 0);
+  rb_define_virtual_variable("$`", prematch_getter, 0);
+  rb_define_virtual_variable("$'", postmatch_getter, 0);
+  rb_define_virtual_variable("$+", last_paren_match_getter, 0);
+
+  rb_define_virtual_variable("$=", ignorecase_getter, ignorecase_setter);
+  rb_define_virtual_variable("$KCODE", kcode_getter, kcode_setter);
+  rb_define_virtual_variable("$-K", kcode_getter, kcode_setter);
+  */
+
+  kit->cRegexp = sandbox_defclass(kit, "Regexp", kit->cObject);
+  SAND_COPY_ALLOC(cRegexp);
+  SAND_COPY_S(cRegexp, "compile");
+  SAND_COPY_S(cRegexp, "quote");
+  SAND_COPY_S(cRegexp, "escape");
+  SAND_COPY_S(cRegexp, "union");
+  SAND_COPY_S(cRegexp, "last_match");
+
+  SAND_COPY(cRegexp, "initialize");
+  SAND_COPY(cRegexp, "initialize_copy");
+  SAND_COPY(cRegexp, "hash");
+  SAND_COPY(cRegexp, "eql?");
+  SAND_COPY(cRegexp, "==");
+  SAND_COPY(cRegexp, "=~");
+  SAND_COPY(cRegexp, "===");
+  SAND_COPY(cRegexp, "~");
+  SAND_COPY(cRegexp, "match");
+  SAND_COPY(cRegexp, "to_s");
+  SAND_COPY(cRegexp, "inspect");
+  SAND_COPY(cRegexp, "source");
+  SAND_COPY(cRegexp, "casefold?");
+  SAND_COPY(cRegexp, "options");
+  SAND_COPY(cRegexp, "kcode");
+
+  SAND_COPY_CONST(cRegexp, "IGNORECASE");
+  SAND_COPY_CONST(cRegexp, "EXTENDED");
+  SAND_COPY_CONST(cRegexp, "MULTILINE");
+
+  /* rb_global_variable(&reg_cache); */
+
+/*
+  kit->cMatch  = sandbox_defclass(kit, "MatchData", kit->cObject);
+  rb_const_set(kit->cObject, rb_intern("MatchingData"), kit->cMatch);
+  SAND_COPY_ALLOC(cMatch);
+  rb_undef_method(CLASS_OF(kit->cMatch), "new");
+
+  SAND_COPY(cMatch, "initialize_copy");
+  SAND_COPY(cMatch, "size");
+  SAND_COPY(cMatch, "length");
+  SAND_COPY(cMatch, "offset");
+  SAND_COPY(cMatch, "begin");
+  SAND_COPY(cMatch, "end");
+  SAND_COPY(cMatch, "to_a");
+  SAND_COPY(cMatch, "[]");
+  SAND_COPY(cMatch, "captures");
+  SAND_COPY(cMatch, "select");
+  SAND_COPY(cMatch, "values_at");
+  SAND_COPY(cMatch, "pre_match");
+  SAND_COPY(cMatch, "post_match");
+  SAND_COPY(cMatch, "to_s");
+  SAND_COPY(cMatch, "inspect");
+  SAND_COPY(cMatch, "string");
+*/
+
+  SAND_COPY(cArray, "pack");
+  SAND_COPY(cString, "unpack");
+
+  kit->cRange = sandbox_defclass(kit, "Range", kit->cObject);
+  rb_include_module(kit->cRange, kit->mEnumerable);
+  SAND_COPY(cRange, "initialize");
+  SAND_COPY(cRange, "==");
+  SAND_COPY(cRange, "===");
+  SAND_COPY(cRange, "eql?");
+  SAND_COPY(cRange, "hash");
+  SAND_COPY(cRange, "each");
+  SAND_COPY(cRange, "step");
+  SAND_COPY(cRange, "first");
+  SAND_COPY(cRange, "last");
+  SAND_COPY(cRange, "begin");
+  SAND_COPY(cRange, "end");
+  SAND_COPY(cRange, "to_s");
+  SAND_COPY(cRange, "inspect");
+
+  SAND_COPY(cRange, "exclude_end?");
+
+  SAND_COPY(cRange, "member?");
+  SAND_COPY(cRange, "include?");
 }
 
 void Init_sand_table()
