@@ -6,26 +6,26 @@ require 'rake/testtask'
 require 'fileutils'
 include FileUtils
 
-NAME = "wordy"
+NAME = "sandbox"
 VERS = "0.1"
-CLEAN.include ['ext/libwordy/*.{bundle,so,obj,pdb,lib,def,exp}', 'ext/libwordy/Makefile', 
+CLEAN.include ['ext/sand_table/*.{bundle,so,obj,pdb,lib,def,exp}', 'ext/sand_table/Makefile', 
                '**/.*.sw?', '*.gem', '.config']
 
 desc "Does a full compile, test run"
 task :default => [:compile, :test]
 
 desc "Compiles all extensions"
-task :compile => [:libwordy] do
-  if Dir.glob(File.join("lib","libwordy.*")).length == 0
+task :compile => [:sand_table] do
+  if Dir.glob(File.join("lib","sand_table.*")).length == 0
     STDERR.puts "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
     STDERR.puts "Gem actually failed to build.  Your system is"
-    STDERR.puts "NOT configured properly to build Wordy."
+    STDERR.puts "NOT configured properly to build Sandbox."
     STDERR.puts "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
     exit(1)
   end
 end
 
-desc "Packages up Wordy."
+desc "Packages up Sandbox."
 task :package => [:clean]
 
 desc "Run all the tests"
@@ -42,18 +42,18 @@ spec =
         s.platform = Gem::Platform::RUBY
         s.has_rdoc = false
         s.extra_rdoc_files = ["README", "CHANGELOG", "COPYING"]
-        s.summary = "a simple Unicode library, given what Matz has said"
+        s.summary = "a freaky-freaky sandbox library, copies the symbol table, mounts it, evals..."
         s.description = s.summary
         s.author = "why the lucky stiff"
         s.email = 'why@ruby-lang.org'
-        s.homepage = 'http://code.whytheluckystiff.net/wordy/'
+        s.homepage = 'http://code.whytheluckystiff.net/svn/sandbox/'
 
         s.files = %w(COPYING README Rakefile) +
           Dir.glob("{bin,doc,test,lib,extras}/**/*") + 
           Dir.glob("ext/**/*.{h,c,rb}")
         
         s.require_path = "lib"
-        s.autorequire = "wordy"
+        s.autorequire = "sandbox"
         s.extensions = FileList["ext/**/extconf.rb"].to_a
         s.bindir = "bin"
     end
@@ -63,8 +63,8 @@ Rake::GemPackageTask.new(spec) do |p|
     p.gem_spec = spec
 end
 
-extension = "libwordy"
-ext = "ext/libwordy"
+extension = "sand_table"
+ext = "ext/sand_table"
 ext_so = "#{ext}/#{extension}.#{Config::CONFIG['DLEXT']}"
 ext_files = FileList[
   "#{ext}/*.c",

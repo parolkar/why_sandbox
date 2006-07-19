@@ -1,0 +1,31 @@
+This is my first stab at a sandboxing technique written in C.  This module is
+highly experimental, it's hard to say what ramifications this hack could have.
+My testing indicates that you'll probably be okay.
+
+Here's how to use it.
+
+  s = Sandbox.new
+
+Creates a new symbol table and copies all the boilerplate code from the main
+interpreter.  (So be sure you haven't removed any methods from the main
+interpreter!)
+
+  s.eval "5 + 6"
+  #=> 11
+
+Use eval to execute scripts inside the sandbox.  The symbol table will be
+swapped in.  This will even effect C extensions.  The boilerplate is very
+simple, there's no support for any IO.
+
+  s.eval "'test'.class.ancestors.last.method(:p)"
+
+See, everything inherits from new Kernel, Object and Class classes.  The
+Kernel in this case has no 'p' method.  You'll need to define it yourself.
+
+THIS SANDBOX IS NOT SECURE YET! Due to some minor constraints in Ruby 1.8.4,
+I can't swap out the global vars.  So you can get to the master symbol 
+table.
+
+  s.eval "$0.class.ancestors.last.fork"
+
+Anyway, that's it.  Not bad.
