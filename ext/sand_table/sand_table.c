@@ -235,10 +235,7 @@ sandbox_singleton_class(kit, obj)
     rb_raise(rb_eTypeError, "can't define singleton");
   }
   if (rb_special_const_p(obj)) {
-    SPECIAL_SINGLETON(Qnil, kit->cNilClass);
-    SPECIAL_SINGLETON(Qfalse, kit->cFalseClass);
-    SPECIAL_SINGLETON(Qtrue, kit->cTrueClass);
-    rb_bug("unknown immediate %ld", obj);
+    rb_raise(rb_eTypeError, "no special constants in the sandbox");
   }
 
   DEFER_INTS;
