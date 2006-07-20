@@ -11,12 +11,22 @@
 #include <st.h>
 #include <env.h>
 #include <node.h>
+#include <version.h>
 
 #define FREAKYFREAKY "freakyfreakysandbox"
 
 extern st_table *rb_class_tbl;
-/* extern st_table *rb_global_tbl; */
 extern VALUE ruby_top_self;
+
+#if RUBY_VERSION_CODE >= 185
+#define FFSAFE
+extern st_table *rb_global_tbl;
+extern VALUE rb_eRegexpError;
+extern VALUE rb_cMatch;
+extern VALUE rb_cNameErrorMesg;
+#else
+#warning "** Sandbox will NOT be safe unless used with 1.8.5 -- Proceeding anyway! **"
+#endif
 
 typedef struct SANDKIT {
   st_table *tbl;
@@ -90,7 +100,12 @@ mark_sandbox(kit)
   if (kit->banished != NULL)
     mark_sandbox(kit->banished);
   rb_mark_tbl(kit->tbl);
-  /* rb_mark_tbl(kit->globals); */
+#ifdef FFSAFE
+/*
+  if (kit->globals != NULL)
+    st_foreach(kit->globals, mark_global_entry, 0);
+*/
+#endif
   rb_gc_mark_maybe(kit->cObject);
   rb_gc_mark_maybe(kit->cModule);
   rb_gc_mark_maybe(kit->cClass);
@@ -142,6 +157,7 @@ mark_sandbox(kit)
  
   rb_gc_mark_maybe(kit->eScriptError);
   rb_gc_mark_maybe(kit->eNameError);
+  rb_gc_mark_maybe(kit->cNameErrorMesg);
   rb_gc_mark_maybe(kit->eSyntaxError);
   rb_gc_mark_maybe(kit->eLoadError);
 }
@@ -151,7 +167,9 @@ free_sandbox(kit)
   sandkit *kit;
 {   
   st_free_table(kit->tbl);
-  /* st_free_table(kit->globals); */
+#ifdef FFSAFE
+  st_free_table(kit->globals);
+#endif
   MEMZERO(kit, sandkit, 1);
   free(kit);
 }
@@ -326,6 +344,38 @@ sandbox_copy_method(klass, def, oklass)
   rb_add_method(klass, def, NEW_CFUNC(body->nd_cfnc, body->nd_argc), NOEX_PUBLIC);
 }
 
+struct global_entry {
+  struct global_variable *var;
+  ID id;
+};
+
+/*
+struct global_entry*
+rb_global_entry(id)
+    ID id;
+{
+  struct global_entry *entry;
+
+  if (!st_lookup(rb_global_tbl, id, (st_data_t *)&entry)) {
+    struct global_variable *var;
+    entry = ALLOC(struct global_entry);
+    var = ALLOC(struct global_variable);
+    entry->id = id;
+    entry->var = var;
+    var->counter = 1;
+    var->data = 0;
+    var->getter = undef_getter;
+    var->setter = undef_setter;
+    var->marker = undef_marker;
+
+    var->block_trace = 0;
+    var->trace = 0;
+    st_add_direct(rb_global_tbl, id, (st_data_t)entry);
+  }
+  return entry;
+}
+*/
+
 static VALUE sandbox_alloc_obj _((VALUE));
 static VALUE
 sandbox_alloc_obj(klass)
@@ -360,7 +410,6 @@ sandbox_whoa_whoa_whoa(go)
   /* okay, move it all back */
   sandkit *norm = go->norm;
   rb_class_tbl = norm->tbl;
-  /* rb_global_tbl = norm->globals; */
   rb_cObject = norm->cObject;
   rb_cModule = norm->cModule;
   rb_cClass = norm->cClass;
@@ -375,7 +424,6 @@ sandbox_whoa_whoa_whoa(go)
   rb_cFloat = norm->cFloat;
   rb_cHash = norm->cHash;
   rb_cInteger = norm->cInteger;
-  /* rb_cMatch = norm->cMatch; */
   rb_cNilClass = norm->cNilClass;
   rb_cNumeric = norm->cNumeric;
   rb_mPrecision = norm->mPrecision;
@@ -396,7 +444,6 @@ sandbox_whoa_whoa_whoa(go)
   rb_eEOFError = norm->eEOFError;
   rb_eIndexError = norm->eIndexError;
   rb_eRangeError = norm->eRangeError;
-  /* rb_eRegexpError = norm->eRegexpError; */
   rb_eIOError = norm->eIOError;
   rb_eRuntimeError = norm->eRuntimeError;
   rb_eSecurityError = norm->eSecurityError;
@@ -412,6 +459,13 @@ sandbox_whoa_whoa_whoa(go)
   rb_eSyntaxError = norm->eSyntaxError;
   rb_eLoadError = norm->eLoadError;
   ruby_top_self = norm->oMain;
+#ifdef FFSAFE
+  rb_global_tbl = norm->globals;
+  rb_cMatch = norm->cMatch;
+  rb_eRegexpError = norm->eRegexpError;
+  rb_cNameErrorMesg = norm->cNameErrorMesg;
+#endif
+
   go->kit->banished = NULL;
   free(go->norm);
   free(go);
@@ -429,7 +483,6 @@ sandbox_swap_in( self )
   norm = ALLOC(sandkit);
   MEMZERO(norm, sandkit, 1);
   norm->tbl = rb_class_tbl;
-  /* norm->globals = rb_global_tbl; */
   norm->cObject = rb_cObject;
   norm->cModule = rb_cModule;
   norm->cClass = rb_cClass;
@@ -445,7 +498,6 @@ sandbox_swap_in( self )
   norm->cFloat = rb_cFloat;
   norm->cHash = rb_cHash;
   norm->cInteger = rb_cInteger;
-  /* norm->cMatch = rb_cMatch; */
   norm->cNilClass = rb_cNilClass;
   norm->cNumeric = rb_cNumeric;
   norm->mPrecision = rb_mPrecision;
@@ -466,7 +518,6 @@ sandbox_swap_in( self )
   norm->eEOFError = rb_eEOFError;
   norm->eIndexError = rb_eIndexError;
   norm->eRangeError = rb_eRangeError;
-  /* norm->eRegexpError = rb_eRegexpError; */
   norm->eIOError = rb_eIOError;
   norm->eRuntimeError = rb_eRuntimeError;
   norm->eSecurityError = rb_eSecurityError;
@@ -481,10 +532,15 @@ sandbox_swap_in( self )
   norm->eNameError = rb_eNameError;
   norm->eSyntaxError = rb_eSyntaxError;
   norm->eLoadError = rb_eLoadError;
+#ifdef FFSAFE
+  norm->globals = rb_global_tbl;
+  norm->cMatch = rb_cMatch;
+  norm->eRegexpError = rb_eRegexpError;
+  norm->cNameErrorMesg = rb_cNameErrorMesg;
+#endif
 
   /* replace everything */
   rb_class_tbl = kit->tbl;
-  /* rb_global_tbl = kit->globals; */
   rb_cObject = kit->cObject;
   rb_cModule = kit->cModule;
   rb_cClass = kit->cClass;
@@ -499,7 +555,6 @@ sandbox_swap_in( self )
   rb_cFloat = kit->cFloat;
   rb_cHash = kit->cHash;
   rb_cInteger = kit->cInteger;
-  /* rb_cMatch = kit->cMatch; */
   rb_cNilClass = kit->cNilClass;
   rb_cNumeric = kit->cNumeric;
   rb_mPrecision = kit->mPrecision;
@@ -520,7 +575,6 @@ sandbox_swap_in( self )
   rb_eEOFError = kit->eEOFError;
   rb_eIndexError = kit->eIndexError;
   rb_eRangeError = kit->eRangeError;
-  /* rb_eRegexpError = kit->eRegexpError; */
   rb_eIOError = kit->eIOError;
   rb_eRuntimeError = kit->eRuntimeError;
   rb_eSecurityError = kit->eSecurityError;
@@ -536,6 +590,12 @@ sandbox_swap_in( self )
   rb_eSyntaxError = kit->eSyntaxError;
   rb_eLoadError = kit->eLoadError;
   ruby_top_self = kit->oMain;
+#ifdef FFSAFE
+  rb_global_tbl = kit->globals;
+  rb_cMatch = kit->cMatch;
+  rb_eRegexpError = kit->eRegexpError;
+  rb_cNameErrorMesg = kit->cNameErrorMesg;
+#endif
 
   go = ALLOC(go_cart);
   go->argv = ALLOC(VALUE);
@@ -586,7 +646,9 @@ void Init_kit(kit)
   VALUE metaclass;
 
   kit->tbl = st_init_numtable();
-  /* kit->globals = st_init_numtable(); */
+#ifdef FFSAFE
+  kit->globals = st_init_numtable();
+#endif
   kit->cObject = 0;
 
   kit->cObject = sandbox_defclass(kit, "Object", 0);
@@ -1030,7 +1092,9 @@ void Init_kit(kit)
   SAND_COPY(eNameError, "initialize");
   SAND_COPY(eNameError, "name");
   SAND_COPY(eNameError, "to_s");
+#ifndef FFSAFE
   VALUE rb_cNameErrorMesg = rb_const_get_at(rb_eNameError, rb_intern("message"));
+#endif
   kit->cNameErrorMesg = rb_define_class_under(kit->eNameError, "message", kit->cData);
   SAND_COPY(cNameErrorMesg, "to_str");
   SAND_COPY(cNameErrorMesg, "_dump");
@@ -1421,7 +1485,9 @@ void Init_kit(kit)
 
   SAND_COPY(cStruct, "members");
 
+#ifndef FFSAFE
   VALUE rb_eRegexpError = rb_const_get(rb_cObject, rb_intern("RegexpError"));
+#endif
   kit->eRegexpError = sandbox_defclass(kit, "RegexpError", kit->eStandardError);
 
   /*
@@ -1466,7 +1532,9 @@ void Init_kit(kit)
 
   /* rb_global_variable(&reg_cache); */
 
+#ifndef FFSAFE
   VALUE rb_cMatch = rb_const_get(rb_cObject, rb_intern("MatchData"));
+#endif
   kit->cMatch  = sandbox_defclass(kit, "MatchData", kit->cObject);
   rb_const_set(kit->cObject, rb_intern("MatchingData"), kit->cMatch);
   SAND_COPY_ALLOC(cMatch);
