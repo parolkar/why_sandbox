@@ -60,7 +60,7 @@ typedef struct SANDKIT {
   VALUE eEOFError;
   VALUE eIndexError;
   VALUE eRangeError;
-  /* VALUE eRegexpError; */
+  VALUE eRegexpError;
   VALUE eIOError;
   VALUE eRuntimeError;
   VALUE eSecurityError;
@@ -74,6 +74,7 @@ typedef struct SANDKIT {
  
   VALUE eScriptError;
   VALUE eNameError;
+  VALUE cNameErrorMesg;
   VALUE eSyntaxError;
   VALUE eLoadError;
 
@@ -107,7 +108,7 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->cFloat);
   rb_gc_mark_maybe(kit->cHash);
   rb_gc_mark_maybe(kit->cInteger);
-  /* rb_gc_mark_maybe(kit->cMatch); */
+  rb_gc_mark_maybe(kit->cMatch);
   rb_gc_mark_maybe(kit->cNilClass);
   rb_gc_mark_maybe(kit->cNumeric);
   rb_gc_mark_maybe(kit->mPrecision);
@@ -353,14 +354,6 @@ typedef struct {
 } go_cart;
 
 VALUE
-sandbox_go_go_go(go)
-  go_cart *go;
-{
-  go->kit->banished = go->norm;
-  return rb_obj_instance_eval(1, go->argv, go->kit->oMain);
-}
-
-VALUE
 sandbox_whoa_whoa_whoa(go)
   go_cart *go;
 {
@@ -424,9 +417,9 @@ sandbox_whoa_whoa_whoa(go)
   free(go);
 }
 
-VALUE
-sandbox_eval( self, str )
-  VALUE self, str;
+go_cart *
+sandbox_swap_in( self )
+  VALUE self;
 {
   sandkit *kit, *norm;
   go_cart *go;
@@ -546,10 +539,44 @@ sandbox_eval( self, str )
 
   go = ALLOC(go_cart);
   go->argv = ALLOC(VALUE);
-  go->argv[0] = str;
   go->norm = norm;
   go->kit = kit;
+  go->kit->banished = go->norm;
+  return go;
+}
 
+VALUE
+sandbox_load_begin(go)
+  go_cart *go;
+{
+  /* rb_load(go->argv[0], 1); */
+  go->argv[0] = rb_funcall(rb_cFile, rb_intern("read"), 1, go->argv[0]);
+  return rb_mod_module_eval(1, go->argv, go->kit->cObject);
+}
+
+VALUE
+sandbox_load( self, path )
+  VALUE self, path;
+{
+  // rb_load(path, 0);
+  go_cart *go = sandbox_swap_in( self );
+  go->argv[0] = path;
+  return rb_ensure(sandbox_load_begin, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
+}
+
+VALUE
+sandbox_go_go_go(go)
+  go_cart *go;
+{
+  return rb_mod_module_eval(1, go->argv, go->kit->cObject);
+}
+
+VALUE
+sandbox_eval( self, str )
+  VALUE self, str;
+{
+  go_cart *go = sandbox_swap_in( self );
+  go->argv[0] = str;
   return rb_ensure(sandbox_go_go_go, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
 }
 
@@ -1003,13 +1030,17 @@ void Init_kit(kit)
   SAND_COPY(eNameError, "initialize");
   SAND_COPY(eNameError, "name");
   SAND_COPY(eNameError, "to_s");
-  /*
+  VALUE rb_cNameErrorMesg = rb_const_get_at(rb_eNameError, rb_intern("message"));
   kit->cNameErrorMesg = rb_define_class_under(kit->eNameError, "message", kit->cData);
-  SAND_COPY(cNameErrorMesg, "!");
   SAND_COPY(cNameErrorMesg, "to_str");
   SAND_COPY(cNameErrorMesg, "_dump");
-  SAND_COPY(cNameErrorMesg, "_load");
-  */
+  if (rb_respond_to(rb_cNameErrorMesg, rb_intern("!"))) {
+    SAND_COPY_S(cNameErrorMesg, "!");
+    SAND_COPY_S(cNameErrorMesg, "_load");
+  } else {
+    SAND_COPY(cNameErrorMesg, "!");
+    SAND_COPY(cNameErrorMesg, "_load");
+  }
   kit->eNoMethodError = sandbox_defclass(kit, "NoMethodError", kit->eNameError);
   SAND_COPY(eNoMethodError, "initialize");
   SAND_COPY(eNoMethodError, "args");
@@ -1390,9 +1421,10 @@ void Init_kit(kit)
 
   SAND_COPY(cStruct, "members");
 
-  /*
+  VALUE rb_eRegexpError = rb_const_get(rb_cObject, rb_intern("RegexpError"));
   kit->eRegexpError = sandbox_defclass(kit, "RegexpError", kit->eStandardError);
 
+  /*
   rb_define_virtual_variable("$~", match_getter, match_setter);
   rb_define_virtual_variable("$&", last_match_getter, 0);
   rb_define_virtual_variable("$`", prematch_getter, 0);
@@ -1434,7 +1466,7 @@ void Init_kit(kit)
 
   /* rb_global_variable(&reg_cache); */
 
-/*
+  VALUE rb_cMatch = rb_const_get(rb_cObject, rb_intern("MatchData"));
   kit->cMatch  = sandbox_defclass(kit, "MatchData", kit->cObject);
   rb_const_set(kit->cObject, rb_intern("MatchingData"), kit->cMatch);
   SAND_COPY_ALLOC(cMatch);
@@ -1456,7 +1488,6 @@ void Init_kit(kit)
   SAND_COPY(cMatch, "to_s");
   SAND_COPY(cMatch, "inspect");
   SAND_COPY(cMatch, "string");
-*/
 
   SAND_COPY(cArray, "pack");
   SAND_COPY(cString, "unpack");
@@ -1488,4 +1519,5 @@ void Init_sand_table()
   VALUE cSandbox = rb_define_class("Sandbox", rb_cObject);
   rb_define_alloc_func( cSandbox, sandbox_alloc );
   rb_define_method( cSandbox, "eval", sandbox_eval, 1 );
+  rb_define_method( cSandbox, "load", sandbox_load, 1 );
 }
