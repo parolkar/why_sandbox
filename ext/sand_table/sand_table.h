@@ -11,6 +11,7 @@
 #define SAND_TABLE_H
 
 #define SAND_VERSION "0.0"
+#define SAND_REV_ID "$Rev$"
 
 #define FREAKYFREAKY "freakyfreakysandbox"
 

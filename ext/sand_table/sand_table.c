@@ -1324,6 +1324,8 @@ Init_kit(kit)
 void Init_sand_table()
 {
   VALUE cSandbox = rb_define_class("Sandbox", rb_cObject);
+  rb_define_const( cSandbox, "VERSION", rb_str_new2( SAND_VERSION ) );
+  rb_define_const( cSandbox, "REV_ID", rb_str_new2( SAND_REV_ID ) );
   rb_define_alloc_func( cSandbox, sandbox_alloc );
   rb_define_method( cSandbox, "eval", sandbox_eval, 1 );
   rb_define_method( cSandbox, "load", sandbox_load, 1 );
