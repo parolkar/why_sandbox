@@ -12,6 +12,8 @@
 #include <env.h>
 #include <node.h>
 
+#define FREAKYFREAKY "freakyfreakysandbox"
+
 extern st_table *rb_class_tbl;
 /* extern st_table *rb_global_tbl; */
 extern VALUE ruby_top_self;
@@ -149,6 +151,7 @@ free_sandbox(kit)
 {   
   st_free_table(kit->tbl);
   /* st_free_table(kit->globals); */
+  MEMZERO(kit, sandkit, 1);
   free(kit);
 }
  
@@ -315,6 +318,10 @@ sandbox_copy_method(klass, def, oklass)
      
   /* FIXME: handle failure? */
   body = rb_method_node(oklass, def);
+  if (!body) {
+    rb_warn("%s: no method %s found for copying", FREAKYFREAKY, rb_id2name(def));
+    return;
+  }
   rb_add_method(klass, def, NEW_CFUNC(body->nd_cfnc, body->nd_argc), NOEX_PUBLIC);
 }
 
@@ -427,6 +434,7 @@ sandbox_eval( self, str )
 
   /* save everything */
   norm = ALLOC(sandkit);
+  MEMZERO(norm, sandkit, 1);
   norm->tbl = rb_class_tbl;
   /* norm->globals = rb_global_tbl; */
   norm->cObject = rb_cObject;
@@ -705,7 +713,7 @@ void Init_kit(kit)
   kit->cData = sandbox_defclass(kit, "Data", kit->cObject);
   rb_undef_alloc_func(kit->cData);
 
-  /* rb_global_variable(&ruby_top_self); */
+  rb_global_variable(&kit->oMain);
   kit->oMain = rb_obj_alloc(kit->cObject);
   SAND_COPY_MAIN("to_s");
 
@@ -784,11 +792,6 @@ void Init_kit(kit)
   SAND_COPY_KERNEL("loop");
 
   SAND_COPY(mKernel, "respond_to?");
-  /*
-  respond_to   = rb_intern("respond_to?");
-  rb_global_variable((VALUE*)&basic_respond_to);
-  basic_respond_to = rb_method_node(rb_cObject, respond_to);
-  */
   
   SAND_COPY_KERNEL("raise");
   SAND_COPY_KERNEL("fail");
