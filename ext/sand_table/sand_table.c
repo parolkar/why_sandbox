@@ -69,10 +69,8 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->eSyntaxError);
   rb_gc_mark_maybe(kit->eLoadError);
 #ifdef FFSAFE
-/*
   if (kit->globals != NULL)
-    st_foreach(kit->globals, mark_global_entry, 0);
-*/
+    sandbox_mark_globals(kit->globals);
 #endif
 }
 
@@ -1325,6 +1323,9 @@ Init_kit(kit)
   SAND_COPY(cRange, "member?");
   SAND_COPY(cRange, "include?");
 
+  SAND_COPY(mKernel, "hash");
+  SAND_COPY(mKernel, "__id__");
+  SAND_COPY(mKernel, "object_id");
 #ifdef FFSAFE
   kit->_progname = sandbox_str(kit, "(sandbox)");
   sandbox_define_hooked_variable(kit, "$0", &kit->_progname, 0, 0);

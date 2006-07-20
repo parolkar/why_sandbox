@@ -15,6 +15,13 @@ if RUBY_VERSION >= "1.8.5"
 
   def test_globals
     assert_equal "(sandbox)", eval("$0")
+    /(.)(.)(.)/.match("abc")
+    assert_equal "TEST", eval("$TEST = 'TEST'; $TEST")
+    assert_equal "e", eval("/(.)(.)(.)/.match('def'); $2")
+    assert_equal "b", $2
+    assert_equal "TEST", eval("$TEST")
+    assert_equal nil, eval("$2")
+    /(.)(.)(.)/.match("ghi")
   end
 end
 

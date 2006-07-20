@@ -174,6 +174,14 @@ sandbox_str(kit, ptr)
   return (VALUE)str;
 }
 
+
+struct trace_var {
+  int removed;
+  void (*func)();
+  VALUE data;
+  struct trace_var *next;
+};
+
 struct global_variable {
   int   counter;
   void *data;
@@ -376,4 +384,29 @@ sandbox_define_virtual_variable(kit, name, getter, setter)
   if (!getter) getter = val_getter;
   if (!setter) setter = readonly_setter;
   sandbox_define_hooked_variable(kit, name, 0, getter, setter);
+}
+
+static int
+sandbox_mark_global(key, entry)
+  ID key;
+  struct global_entry *entry;
+{
+  struct trace_var *trace;
+  struct global_variable *var = entry->var;
+
+  (*var->marker)(var->data);
+  trace = var->trace;
+  while (trace) {
+    if (trace->data) rb_gc_mark_maybe(trace->data);
+    trace = trace->next;
+  }
+  return ST_CONTINUE;
+}
+
+void
+sandbox_mark_globals(st_table *tbl)
+{   
+  if (tbl) {
+    st_foreach(tbl, sandbox_mark_global, 0);
+  }
 }

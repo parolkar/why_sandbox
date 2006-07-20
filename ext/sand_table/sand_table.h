@@ -115,6 +115,7 @@ void sandbox_define_hooked_variable(sandkit *kit, const char *, VALUE *, VALUE (
 void sandbox_define_variable(sandkit *kit, const char *, VALUE *);
 void sandbox_define_readonly_variable(sandkit *, const char  *, VALUE *);
 void sandbox_define_virtual_variable(sandkit *, const char *, VALUE (*)(), void (*)());
+void sandbox_mark_globals(st_table *);
 
 #if defined(__cplusplus)
 }  /* extern "C" { */
