@@ -174,7 +174,7 @@ sandbox_str(kit, ptr)
   return (VALUE)str;
 }
 
-
+#ifdef FFSAFE
 struct trace_var {
   int removed;
   void (*func)();
@@ -410,3 +410,4 @@ sandbox_mark_globals(st_table *tbl)
     st_foreach(tbl, sandbox_mark_global, 0);
   }
 }
+#endif

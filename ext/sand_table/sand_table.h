@@ -111,11 +111,13 @@ VALUE sandbox_metaclass(sandkit *, VALUE, VALUE);
 VALUE sandbox_singleton_class(sandkit *, VALUE);
 VALUE sandbox_defclass(sandkit *, const char *, VALUE);
 VALUE sandbox_defmodule(sandkit *, const char *);
+#ifdef FFSAFE
 void sandbox_define_hooked_variable(sandkit *kit, const char *, VALUE *, VALUE (*)(), void (*)());
 void sandbox_define_variable(sandkit *kit, const char *, VALUE *);
 void sandbox_define_readonly_variable(sandkit *, const char  *, VALUE *);
 void sandbox_define_virtual_variable(sandkit *, const char *, VALUE (*)(), void (*)());
 void sandbox_mark_globals(st_table *);
+#endif
 
 #if defined(__cplusplus)
 }  /* extern "C" { */

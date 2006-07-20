@@ -53,6 +53,7 @@ spec =
           Dir.glob("{bin,doc,test,lib,extras}/**/*") + 
           Dir.glob("ext/**/*.{h,c,rb}")
         
+        s.required_ruby_version = '>= 1.8.5'
         s.require_path = "lib"
         s.autorequire = "sandbox"
         s.extensions = FileList["ext/**/extconf.rb"].to_a
