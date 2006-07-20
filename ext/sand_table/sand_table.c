@@ -339,25 +339,6 @@ sandbox_swap_in( self )
 }
 
 VALUE
-sandbox_load_begin(go)
-  go_cart *go;
-{
-  /* rb_load(go->argv[0], 1); */
-  go->argv[0] = rb_funcall(rb_cFile, rb_intern("read"), 1, go->argv[0]);
-  return rb_mod_module_eval(1, go->argv, go->kit->cObject);
-}
-
-VALUE
-sandbox_load( self, path )
-  VALUE self, path;
-{
-  // rb_load(path, 0);
-  go_cart *go = sandbox_swap_in( self );
-  go->argv[0] = path;
-  return rb_ensure(sandbox_load_begin, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
-}
-
-VALUE
 sandbox_go_go_go(go)
   go_cart *go;
 {
@@ -373,11 +354,68 @@ sandbox_eval( self, str )
   return rb_ensure(sandbox_go_go_go, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
 }
 
+VALUE
+sandbox_load_begin(go)
+  go_cart *go;
+{
+  go->argv[0] = rb_funcall(rb_cFile, rb_intern("read"), 1, go->argv[0]);
+  return sandbox_go_go_go(go);
+}
+
+VALUE
+sandbox_load( self, path )
+  VALUE self, path;
+{
+  // rb_load(path, 0);
+  go_cart *go = sandbox_swap_in( self );
+  go->argv[0] = path;
+  return rb_ensure(sandbox_load_begin, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
+}
+
+VALUE
+sandbox_safe_go_go_go(go)
+  go_cart *go;
+{
+  return rb_marshal_dump(rb_mod_module_eval(1, go->argv, go->kit->cObject), Qnil);
+}
+
+VALUE
+sandbox_safe_eval( self, str )
+  VALUE self, str;
+{
+  VALUE marshed;
+  go_cart *go = sandbox_swap_in( self );
+  go->argv[0] = str;
+  marshed = rb_ensure(sandbox_safe_go_go_go, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
+  return rb_marshal_load(marshed);
+}
+
+VALUE
+sandbox_safe_load_begin(go)
+  go_cart *go;
+{
+  go->argv[0] = rb_funcall(rb_cFile, rb_intern("read"), 1, go->argv[0]);
+  return sandbox_safe_go_go_go(go);
+}
+
+VALUE
+sandbox_safe_load( self, path )
+  VALUE self, path;
+{
+  VALUE marshed;
+  go_cart *go = sandbox_swap_in( self );
+  go->argv[0] = path;
+  marshed = rb_ensure(sandbox_safe_load_begin, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
+  return rb_marshal_load(marshed);
+}
+
 #ifdef FFSAFE
+static VALUE cSandboxSafe;
+
 VALUE sandbox_safe( klass )
   VALUE klass;
 {
-  return rb_funcall( klass, rb_intern("new"), 0 );
+  return rb_funcall( cSandboxSafe, rb_intern("new"), 0 );
 }
 #endif
 
@@ -1342,5 +1380,8 @@ void Init_sand_table()
   rb_define_method( cSandbox, "load", sandbox_load, 1 );
 #ifdef FFSAFE
   rb_define_singleton_method( cSandbox, "safe", sandbox_safe, 0 );
+  cSandboxSafe = rb_define_class_under(cSandbox, "Safe", cSandbox);
+  rb_define_method( cSandboxSafe, "eval", sandbox_safe_eval, 1 );
+  rb_define_method( cSandboxSafe, "load", sandbox_safe_load, 1 );
 #endif
 }
