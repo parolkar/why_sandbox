@@ -157,19 +157,58 @@ sandbox_defmodule(kit, name)
   return module;
 }
 
+VALUE
+sandbox_str(kit, ptr)
+  sandkit *kit;
+  const char *ptr;
+{   
+  NEWOBJ(str, struct RString);
+  OBJSETUP(str, kit->cString, T_STRING);
+
+  str->len = strlen(ptr);
+  str->aux.capa = str->len;
+  str->ptr = ALLOC_N(char,str->len+1);
+  memcpy(str->ptr, ptr, str->len);
+  str->ptr[str->len] = '\0';
+
+  return (VALUE)str;
+}
+
+struct global_variable {
+  int   counter;
+  void *data;
+  VALUE (*getter)();
+  void  (*setter)();
+  void  (*marker)();
+  int block_trace;
+  struct trace_var *trace;
+};
+
 struct global_entry {
   struct global_variable *var;
   ID id;
 };
 
-/*
+static VALUE undef_getter();
+static void  undef_setter();
+static void  undef_marker();
+
+static VALUE val_getter();
+static void  val_setter();
+static void  val_marker();
+
+static VALUE var_getter();
+static void  var_setter();
+static void  var_marker();
+
 struct global_entry*
-rb_global_entry(id)
-    ID id;
+sandbox_global_entry(kit, id)
+  sandkit *kit;
+  ID id;
 {
   struct global_entry *entry;
 
-  if (!st_lookup(rb_global_tbl, id, (st_data_t *)&entry)) {
+  if (!st_lookup(kit->globals, id, (st_data_t *)&entry)) {
     struct global_variable *var;
     entry = ALLOC(struct global_entry);
     var = ALLOC(struct global_variable);
@@ -183,9 +222,158 @@ rb_global_entry(id)
 
     var->block_trace = 0;
     var->trace = 0;
-    st_add_direct(rb_global_tbl, id, (st_data_t)entry);
+    st_add_direct(kit->globals, id, (st_data_t)entry);
   }
   return entry;
 }
-*/
 
+static VALUE
+undef_getter(id)
+  ID id;
+{
+  rb_warning("global variable `%s' not initialized", rb_id2name(id));
+
+  return Qnil;
+}
+
+static void
+undef_setter(val, id, data, var)
+  VALUE val;
+  ID id;
+  void *data;
+  struct global_variable *var;
+{
+  var->getter = val_getter;
+  var->setter = val_setter;
+  var->marker = val_marker;
+
+  var->data = (void*)val;
+}
+
+static void
+undef_marker()
+{
+}
+
+static VALUE
+val_getter(id, val)
+  ID id;
+  VALUE val;
+{
+  return val;
+}
+
+static void
+val_setter(val, id, data, var)
+  VALUE val;
+  ID id;
+  void *data;
+  struct global_variable *var;
+{
+  var->data = (void*)val;
+}
+
+static void
+val_marker(data)
+  VALUE data;
+{
+  if (data) rb_gc_mark_maybe(data);
+}
+
+static VALUE
+var_getter(id, var)
+  ID id;
+  VALUE *var;
+{
+  if (!var) return Qnil;
+  return *var;
+}
+
+static void
+var_setter(val, id, var)
+  VALUE val;
+  ID id;
+  VALUE *var;
+{
+  *var = val;
+}
+
+static void
+var_marker(var)
+  VALUE *var;
+{
+  if (var) rb_gc_mark_maybe(*var);
+}
+
+static void
+readonly_setter(val, id, var)
+  VALUE val;
+  ID id;
+  void *var;
+{
+  rb_name_error(id, "%s is a read-only variable", rb_id2name(id));
+}
+
+static ID
+global_id(name)
+  const char *name;
+{
+  ID id;
+
+  if (name[0] == '$') id = rb_intern(name);
+  else {
+    char *buf = ALLOCA_N(char, strlen(name)+2);
+    buf[0] = '$';
+    strcpy(buf+1, name);
+    id = rb_intern(buf);
+  }
+  return id;
+}
+
+void
+sandbox_define_hooked_variable(kit, name, var, getter, setter)
+  sandkit *kit;
+  const char  *name;
+  VALUE *var;
+  VALUE (*getter)();
+  void  (*setter)();
+{
+  struct global_variable *gvar;
+  ID id = global_id(name);
+
+  gvar = sandbox_global_entry(kit, id)->var;
+  gvar->data = (void*)var;
+  gvar->getter = getter?getter:var_getter;
+  gvar->setter = setter?setter:var_setter;
+  gvar->marker = var_marker;
+}
+
+void
+sandbox_define_variable(kit, name, var)
+  sandkit *kit;
+  const char  *name;
+  VALUE *var;
+{
+  sandbox_define_hooked_variable(kit, name, var, 0, 0);
+}
+
+void
+sandbox_define_readonly_variable(kit, name, var)
+  sandkit      *kit;
+  const char  *name;
+  VALUE *var;
+{
+  sandbox_define_hooked_variable(kit, name, var, 0, readonly_setter);
+}
+
+void
+sandbox_define_virtual_variable(kit, name, getter, setter)
+  sandkit      *kit;
+  const char  *name;
+  VALUE (*getter)();
+  void  (*setter)();
+{
+  if (!getter) getter = val_getter;
+  if (!setter) setter = readonly_setter;
+  sandbox_define_hooked_variable(kit, name, 0, getter, setter);
+}

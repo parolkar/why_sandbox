@@ -17,18 +17,11 @@ mark_sandbox(kit)
   if (kit->banished != NULL)
     mark_sandbox(kit->banished);
   rb_mark_tbl(kit->tbl);
-#ifdef FFSAFE
-/*
-  if (kit->globals != NULL)
-    st_foreach(kit->globals, mark_global_entry, 0);
-*/
-#endif
   rb_gc_mark_maybe(kit->cObject);
   rb_gc_mark_maybe(kit->cModule);
   rb_gc_mark_maybe(kit->cClass);
   rb_gc_mark_maybe(kit->mKernel);
   rb_gc_mark_maybe(kit->oMain);
-
   rb_gc_mark_maybe(kit->cArray);
   rb_gc_mark_maybe(kit->cBignum);
   rb_gc_mark_maybe(kit->mComparable);
@@ -51,7 +44,6 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->cStruct);
   rb_gc_mark_maybe(kit->cSymbol);
   rb_gc_mark_maybe(kit->cTrueClass);
-
   rb_gc_mark_maybe(kit->eStandardError);
   rb_gc_mark_maybe(kit->eSystemExit);
   rb_gc_mark_maybe(kit->eInterrupt);
@@ -71,12 +63,17 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->eNoMemError);
   rb_gc_mark_maybe(kit->eNoMethodError);
   rb_gc_mark_maybe(kit->eFloatDomainError);
- 
   rb_gc_mark_maybe(kit->eScriptError);
   rb_gc_mark_maybe(kit->eNameError);
   rb_gc_mark_maybe(kit->cNameErrorMesg);
   rb_gc_mark_maybe(kit->eSyntaxError);
   rb_gc_mark_maybe(kit->eLoadError);
+#ifdef FFSAFE
+/*
+  if (kit->globals != NULL)
+    st_foreach(kit->globals, mark_global_entry, 0);
+*/
+#endif
 }
 
 void
@@ -377,6 +374,14 @@ sandbox_eval( self, str )
   go->argv[0] = str;
   return rb_ensure(sandbox_go_go_go, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
 }
+
+#ifdef FFSAFE
+VALUE sandbox_safe( klass )
+  VALUE klass;
+{
+  return rb_funcall( klass, rb_intern("new"), 0 );
+}
+#endif
 
 static void
 Init_kit(kit)
@@ -1319,6 +1324,11 @@ Init_kit(kit)
 
   SAND_COPY(cRange, "member?");
   SAND_COPY(cRange, "include?");
+
+#ifdef FFSAFE
+  kit->_progname = sandbox_str(kit, "(sandbox)");
+  sandbox_define_hooked_variable(kit, "$0", &kit->_progname, 0, 0);
+#endif
 }
 
 void Init_sand_table()
@@ -1329,4 +1339,7 @@ void Init_sand_table()
   rb_define_alloc_func( cSandbox, sandbox_alloc );
   rb_define_method( cSandbox, "eval", sandbox_eval, 1 );
   rb_define_method( cSandbox, "load", sandbox_load, 1 );
+#ifdef FFSAFE
+  rb_define_singleton_method( cSandbox, "safe", sandbox_safe, 0 );
+#endif
 }

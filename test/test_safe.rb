@@ -14,7 +14,11 @@ if RUBY_VERSION >= "1.8.5"
   end
 
   def test_globals
-    assert_equals "(sandbox)", eval("$0")
+    assert_equal "(sandbox)", eval("$0")
   end
 end
+
+  def test_ruby_version
+    assert_equal RUBY_VERSION >= "1.8.5", Sandbox.respond_to?(:safe)
+  end
 end

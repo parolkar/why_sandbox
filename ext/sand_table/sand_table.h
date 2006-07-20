@@ -41,14 +41,11 @@ extern "C" {
 
 typedef struct SANDKIT {
   st_table *tbl;
-  st_table *globals;
-
   VALUE cObject;
   VALUE cModule;
   VALUE cClass;
   VALUE mKernel;
   VALUE oMain;
-
   VALUE cArray;
   VALUE cBignum;
   VALUE mComparable;
@@ -71,7 +68,6 @@ typedef struct SANDKIT {
   VALUE cStruct;
   VALUE cSymbol;
   VALUE cTrueClass;
-
   VALUE eStandardError;
   VALUE eSystemExit;
   VALUE eInterrupt;
@@ -92,12 +88,16 @@ typedef struct SANDKIT {
   VALUE eNoMemError;
   VALUE eNoMethodError;
   VALUE eFloatDomainError;
- 
   VALUE eScriptError;
   VALUE eNameError;
   VALUE cNameErrorMesg;
   VALUE eSyntaxError;
   VALUE eLoadError;
+
+#ifdef FFSAFE
+  st_table *globals;
+  VALUE _progname;
+#endif
 
   struct SANDKIT *banished;
 } sandkit;
@@ -111,6 +111,10 @@ VALUE sandbox_metaclass(sandkit *, VALUE, VALUE);
 VALUE sandbox_singleton_class(sandkit *, VALUE);
 VALUE sandbox_defclass(sandkit *, const char *, VALUE);
 VALUE sandbox_defmodule(sandkit *, const char *);
+void sandbox_define_hooked_variable(sandkit *kit, const char *, VALUE *, VALUE (*)(), void (*)());
+void sandbox_define_variable(sandkit *kit, const char *, VALUE *);
+void sandbox_define_readonly_variable(sandkit *, const char  *, VALUE *);
+void sandbox_define_virtual_variable(sandkit *, const char *, VALUE (*)(), void (*)());
 
 #if defined(__cplusplus)
 }  /* extern "C" { */
