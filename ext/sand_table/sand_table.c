@@ -16,7 +16,7 @@ extern st_table *rb_class_tbl;
 /* extern st_table *rb_global_tbl; */
 extern VALUE ruby_top_self;
 
-typedef struct {
+typedef struct SANDKIT {
   st_table *tbl;
   st_table *globals;
 
@@ -74,6 +74,8 @@ typedef struct {
   VALUE eNameError;
   VALUE eSyntaxError;
   VALUE eLoadError;
+
+  struct SANDKIT *banished;
 } sandkit;
 
 void Init_kit _((sandkit *));
@@ -82,8 +84,10 @@ static void
 mark_sandbox(kit)
   sandkit *kit;
 {
+  if (kit->banished != NULL)
+    mark_sandbox(kit->banished);
   rb_mark_tbl(kit->tbl);
-  rb_mark_tbl(kit->globals);
+  /* rb_mark_tbl(kit->globals); */
   rb_gc_mark_maybe(kit->cObject);
   rb_gc_mark_maybe(kit->cModule);
   rb_gc_mark_maybe(kit->cClass);
@@ -144,7 +148,7 @@ free_sandbox(kit)
   sandkit *kit;
 {   
   st_free_table(kit->tbl);
-  st_free_table(kit->globals);
+  /* st_free_table(kit->globals); */
   free(kit);
 }
  
@@ -330,6 +334,7 @@ sandbox_alloc(class)
     VALUE class;
 {
   sandkit *kit = ALLOC(sandkit);
+  MEMZERO(kit, sandkit, 1);
   Init_kit(kit);
   return Data_Wrap_Struct( class, mark_sandbox, free_sandbox, kit );
 }
@@ -344,6 +349,7 @@ VALUE
 sandbox_go_go_go(go)
   go_cart *go;
 {
+  go->kit->banished = go->norm;
   return rb_obj_instance_eval(1, go->argv, go->kit->oMain);
 }
 
@@ -406,6 +412,7 @@ sandbox_whoa_whoa_whoa(go)
   rb_eSyntaxError = norm->eSyntaxError;
   rb_eLoadError = norm->eLoadError;
   ruby_top_self = norm->oMain;
+  go->kit->banished = NULL;
   free(go->norm);
   free(go);
 }
@@ -544,7 +551,7 @@ void Init_kit(kit)
   VALUE metaclass;
 
   kit->tbl = st_init_numtable();
-  kit->globals = st_init_numtable();
+  /* kit->globals = st_init_numtable(); */
   kit->cObject = 0;
 
   kit->cObject = sandbox_defclass(kit, "Object", 0);
