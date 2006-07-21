@@ -68,6 +68,7 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->cNameErrorMesg);
   rb_gc_mark_maybe(kit->eSyntaxError);
   rb_gc_mark_maybe(kit->eLoadError);
+  rb_gc_mark_maybe(kit->eLocalJumpError);
 #ifdef FFSAFE
   if (kit->globals != NULL)
     sandbox_mark_globals(kit->globals);
@@ -207,6 +208,7 @@ sandbox_whoa_whoa_whoa(go)
   rb_cMatch = norm->cMatch;
   rb_eRegexpError = norm->eRegexpError;
   rb_cNameErrorMesg = norm->cNameErrorMesg;
+  rb_eLocalJumpError = norm->eLocalJumpError;
 #endif
 
   go->kit->banished = NULL;
@@ -281,6 +283,7 @@ sandbox_swap_in( self )
   norm->cMatch = rb_cMatch;
   norm->eRegexpError = rb_eRegexpError;
   norm->cNameErrorMesg = rb_cNameErrorMesg;
+  norm->eLocalJumpError = rb_eLocalJumpError;
 #endif
 
   /* replace everything */
@@ -340,6 +343,7 @@ sandbox_swap_in( self )
   rb_cMatch = kit->cMatch;
   rb_eRegexpError = kit->eRegexpError;
   rb_cNameErrorMesg = kit->cNameErrorMesg;
+  rb_eLocalJumpError = kit->eLocalJumpError;
 #endif
 
   go = ALLOC(go_cart);
@@ -933,6 +937,67 @@ Init_kit(kit)
   kit->mErrno = sandbox_defmodule(kit, "Errno");
   rb_define_global_function("warn", rb_warn_m, 1);
   */
+
+#ifndef FFSAFE
+  VALUE rb_eLocalJumpError = rb_const_get(rb_cObject, rb_intern("LocalJumpError"));
+#endif
+  kit->eLocalJumpError = sandbox_defclass(kit, "LocalJumpError", kit->eStandardError);
+  SAND_COPY(eLocalJumpError, "exit_value");
+  SAND_COPY(eLocalJumpError, "reason");
+
+/*
+  rb_global_variable(&exception_error);
+  exception_error = rb_exc_new2(rb_eFatal, "exception reentered");
+
+  rb_eSysStackError = rb_define_class("SystemStackError", rb_eStandardError);
+  rb_global_variable(&sysstack_error);
+  sysstack_error = rb_exc_new2(rb_eSysStackError, "stack level too deep");
+  OBJ_TAINT(sysstack_error);
+
+  rb_cProc = rb_define_class("Proc", rb_cObject);
+  rb_undef_alloc_func(rb_cProc);
+  rb_define_singleton_method(rb_cProc, "new", proc_s_new, -1);
+
+  rb_define_method(rb_cProc, "clone", proc_clone, 0);
+  rb_define_method(rb_cProc, "dup", proc_dup, 0);
+  rb_define_method(rb_cProc, "call", proc_call, -2);
+  rb_define_method(rb_cProc, "arity", proc_arity, 0);
+  rb_define_method(rb_cProc, "[]", proc_call, -2);
+  rb_define_method(rb_cProc, "==", proc_eq, 1);
+  rb_define_method(rb_cProc, "to_s", proc_to_s, 0);
+  rb_define_method(rb_cProc, "to_proc", proc_to_self, 0);
+  rb_define_method(rb_cProc, "binding", proc_binding, 0);
+
+  rb_define_global_function("proc", proc_lambda, 0);
+  rb_define_global_function("lambda", proc_lambda, 0);
+
+  rb_cMethod = rb_define_class("Method", rb_cObject);
+  rb_undef_alloc_func(rb_cMethod);
+  rb_undef_method(CLASS_OF(rb_cMethod), "new");
+  rb_define_method(rb_cMethod, "==", method_eq, 1);
+  rb_define_method(rb_cMethod, "clone", method_clone, 0);
+  rb_define_method(rb_cMethod, "call", method_call, -1);
+  rb_define_method(rb_cMethod, "[]", method_call, -1);
+  rb_define_method(rb_cMethod, "arity", method_arity, 0);
+  rb_define_method(rb_cMethod, "inspect", method_inspect, 0);
+  rb_define_method(rb_cMethod, "to_s", method_inspect, 0);
+  rb_define_method(rb_cMethod, "to_proc", method_proc, 0);
+  rb_define_method(rb_cMethod, "unbind", method_unbind, 0);
+*/
+  SAND_COPY(mKernel, "method");
+
+/*
+  rb_cUnboundMethod = rb_define_class("UnboundMethod", rb_cObject);
+  rb_undef_alloc_func(rb_cUnboundMethod);
+  rb_undef_method(CLASS_OF(rb_cUnboundMethod), "new");
+  rb_define_method(rb_cUnboundMethod, "==", method_eq, 1);
+  rb_define_method(rb_cUnboundMethod, "clone", method_clone, 0);
+  rb_define_method(rb_cUnboundMethod, "arity", method_arity, 0);
+  rb_define_method(rb_cUnboundMethod, "inspect", method_inspect, 0);
+  rb_define_method(rb_cUnboundMethod, "to_s", method_inspect, 0);
+  rb_define_method(rb_cUnboundMethod, "bind", umethod_bind, 1);
+  rb_define_method(rb_cModule, "instance_method", rb_mod_method, 1);
+*/
 
   kit->eZeroDivError = sandbox_defclass(kit, "ZeroDivisionError", kit->eStandardError);
   kit->eFloatDomainError = sandbox_defclass(kit, "FloatDomainError", kit->eRangeError);

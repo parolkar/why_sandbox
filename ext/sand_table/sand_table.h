@@ -33,6 +33,7 @@ extern st_table *rb_global_tbl;
 extern VALUE rb_eRegexpError;
 extern VALUE rb_cMatch;
 extern VALUE rb_cNameErrorMesg;
+extern VALUE rb_eLocalJumpError;
 #else
 #warning "** Sandbox will NOT be safe unless used with 1.8.5 -- Proceeding anyway! **"
 #endif
@@ -95,6 +96,7 @@ typedef struct SANDKIT {
   VALUE cNameErrorMesg;
   VALUE eSyntaxError;
   VALUE eLoadError;
+  VALUE eLocalJumpError;
 
 #ifdef FFSAFE
   st_table *globals;
@@ -104,7 +106,6 @@ typedef struct SANDKIT {
   struct SCOPE *scope;
   struct SANDKIT *banished;
 } sandkit;
-
 
 VALUE sandbox_module_new(sandkit *);
 VALUE sandbox_dummy();
