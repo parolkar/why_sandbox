@@ -92,6 +92,7 @@ free_sandbox(kit)
 #define SAND_COPY_MAIN(M) sandbox_copy_method(sandbox_singleton_class(kit, kit->oMain), rb_intern(M), rb_singleton_class(ruby_top_self));
 #define SAND_COPY_CONST(K, M) rb_const_set(kit->K, rb_intern(M), rb_const_get(rb_##K, rb_intern(M)));
 #define SAND_COPY_KERNEL(M) SAND_COPY(mKernel, M); SAND_COPY_S(mKernel, M)
+#define SAND_UNDEF(M, K) rb_undef_method(rb_singleton_class(kit->M), K);
 
 void
 sandbox_copy_method(klass, def, oklass)
@@ -127,6 +128,14 @@ sandbox_alloc(class)
   sandkit *kit = ALLOC(sandkit);
   MEMZERO(kit, sandkit, 1);
   Init_kit(kit);
+
+  NEWOBJ(_scope, struct SCOPE);
+  OBJSETUP(_scope, 0, T_SCOPE);
+  _scope->local_tbl = 0;
+  _scope->local_vars = 0;
+  _scope->flags = 0;
+  kit->scope = _scope;
+
   return Data_Wrap_Struct( class, mark_sandbox, free_sandbox, kit );
 }
 
@@ -192,6 +201,7 @@ sandbox_whoa_whoa_whoa(go)
   rb_eSyntaxError = norm->eSyntaxError;
   rb_eLoadError = norm->eLoadError;
   ruby_top_self = norm->oMain;
+  ruby_scope = norm->scope;
 #ifdef FFSAFE
   rb_global_tbl = norm->globals;
   rb_cMatch = norm->cMatch;
@@ -220,7 +230,6 @@ sandbox_swap_in( self )
   norm->cModule = rb_cModule;
   norm->cClass = rb_cClass;
   norm->mKernel = rb_mKernel;
-  norm->oMain = ruby_top_self;
   norm->cArray = rb_cArray;
   norm->cBignum = rb_cBignum;
   norm->mComparable = rb_mComparable;
@@ -265,6 +274,8 @@ sandbox_swap_in( self )
   norm->eNameError = rb_eNameError;
   norm->eSyntaxError = rb_eSyntaxError;
   norm->eLoadError = rb_eLoadError;
+  norm->oMain = ruby_top_self;
+  norm->scope = ruby_scope;
 #ifdef FFSAFE
   norm->globals = rb_global_tbl;
   norm->cMatch = rb_cMatch;
@@ -323,6 +334,7 @@ sandbox_swap_in( self )
   rb_eSyntaxError = kit->eSyntaxError;
   rb_eLoadError = kit->eLoadError;
   ruby_top_self = kit->oMain;
+  ruby_scope = kit->scope;
 #ifdef FFSAFE
   rb_global_tbl = kit->globals;
   rb_cMatch = kit->cMatch;
@@ -516,13 +528,13 @@ Init_kit(kit)
 
   SAND_COPY(cNilClass, "nil?");
   rb_undef_alloc_func(kit->cNilClass);
-  rb_undef_method(CLASS_OF(kit->cNilClass), "new");
+  SAND_UNDEF(cNilClass, "new");
   SAND_COPY_CONST(cObject, "NIL");
 
   kit->cSymbol = sandbox_defclass(kit, "Symbol", kit->cObject);
   SAND_COPY_S(cSymbol, "all_symbols");
   rb_undef_alloc_func(kit->cSymbol);
-  rb_undef_method(CLASS_OF(kit->cSymbol), "new");
+  SAND_UNDEF(cSymbol, "new");
 
   SAND_COPY(cSymbol, "to_i");
   SAND_COPY(cSymbol, "to_int");
@@ -592,7 +604,7 @@ Init_kit(kit)
   SAND_COPY(cTrueClass, "|");
   SAND_COPY(cTrueClass, "^");
   rb_undef_alloc_func(kit->cTrueClass);
-  rb_undef_method(CLASS_OF(kit->cTrueClass), "new");
+  SAND_UNDEF(cTrueClass, "new");
   SAND_COPY_CONST(cObject, "TRUE");
 
   kit->cFalseClass = sandbox_defclass(kit, "FalseClass", kit->cObject);
@@ -601,7 +613,7 @@ Init_kit(kit)
   SAND_COPY(cFalseClass, "|");
   SAND_COPY(cFalseClass, "^");
   rb_undef_alloc_func(kit->cFalseClass);
-  rb_undef_method(CLASS_OF(kit->cFalseClass), "new");
+  SAND_UNDEF(cFalseClass, "new");
   SAND_COPY_CONST(cObject, "FALSE");
 
   kit->mEnumerable = sandbox_defmodule(kit, "Enumerable");
@@ -944,7 +956,7 @@ Init_kit(kit)
 
   kit->cInteger = sandbox_defclass(kit, "Integer", kit->cNumeric);
   rb_undef_alloc_func(kit->cInteger);
-  rb_undef_method(CLASS_OF(kit->cInteger), "new");
+  SAND_UNDEF(cInteger, "new");
 
   SAND_COPY(cInteger, "integer?");
   SAND_COPY(cInteger, "upto");
@@ -1008,7 +1020,7 @@ Init_kit(kit)
   kit->cFloat = sandbox_defclass(kit, "Float", kit->cNumeric);
 
   rb_undef_alloc_func(kit->cFloat);
-  rb_undef_method(CLASS_OF(kit->cFloat), "new");
+  SAND_UNDEF(cFloat, "new");
 
   SAND_COPY_S(cFloat, "induced_from");
   rb_include_module(kit->cFloat, kit->mPrecision);
@@ -1318,7 +1330,7 @@ Init_kit(kit)
   kit->cMatch  = sandbox_defclass(kit, "MatchData", kit->cObject);
   rb_const_set(kit->cObject, rb_intern("MatchingData"), kit->cMatch);
   SAND_COPY_ALLOC(cMatch);
-  rb_undef_method(CLASS_OF(kit->cMatch), "new");
+  SAND_UNDEF(cMatch, "new");
 
   SAND_COPY(cMatch, "initialize_copy");
   SAND_COPY(cMatch, "size");

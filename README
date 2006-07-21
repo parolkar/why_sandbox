@@ -1,31 +1,67 @@
-This is my first stab at a sandboxing technique written in C.  This module is
-highly experimental, it's hard to say what ramifications this hack could have.
-My testing indicates that you'll probably be okay.
 
-Here's how to use it.
+ FREAKY FREAKY SANDBOX.
+_______________________________________________________________________________
 
-  s = Sandbox.new
+ This is a hack.  I know it's a hack and I'm aware that it's a hack.  It's not
+ yet a tried and well-worn practice.  It's not old hand, right?  Not old hand.
 
-Creates a new symbol table and copies all the boilerplate code from the main
-interpreter.  (So be sure you haven't removed any methods from the main
-interpreter!)
+ But it is pretty fantastic.  I'm really surprised how well it works.  Yeah
+ let's talk about that.
+_______________________________________________________________________________
+-------------------------------------------------------------------------------
 
-  s.eval "5 + 6"
-  #=> 11
+ RUNNING TRUSTED CODE.
+_______________________________________________________________________________
 
-Use eval to execute scripts inside the sandbox.  The symbol table will be
-swapped in.  This will even effect C extensions.  The boilerplate is very
-simple, there's no support for any IO.
+ Believe it or not, FreakyFreaky is really handy for running your own apps.
+ Some examples:
 
-  s.eval "'test'.class.ancestors.last.method(:p)"
+ * Start small interpreters which can periodically be dumped and restarted.
+   (Long-running apps can self-upgrade!)
 
-See, everything inherits from new Kernel, Object and Class classes.  The
-Kernel in this case has no 'p' method.  You'll need to define it yourself.
+ * Load multiple different versions of a library.  Maybe you're converting
+   an old version to a new version.
 
-THIS SANDBOX IS NOT SECURE YET! Due to some minor constraints in Ruby 1.8.4,
-I can't swap out the global vars.  So you can get to the master symbol 
-table.
+ * Run multiple Rails apps.  (Rails is a classic example of a crowded namespace
+   where two apps' set of modules cannot coexist.)
+ 
+ For trusted code, you want to use a plain Sandbox that let's you pass code
+ back and forth.
 
-  s.eval "$0.class.ancestors.last.fork"
+   s = Sandbox.new
 
-Anyway, that's it.  Not bad.
+ Creates a new symbol table and copies all the boilerplate code from the main
+ interpreter.  (So be sure you haven't removed any methods from the main
+ interpreter!)
+
+   s.eval "5 + 6"
+   #=> 11
+
+ Use eval to execute scripts inside the sandbox.  With the plain Sandbox,
+ you'll get back the actual objects from the sandbox's world.  See, it's
+ okay to share objects between trusted code.  So, why not?
+
+   s.eval %{
+     class Book
+       attr_accessor :author, :title
+       def initialize(a, t)
+         @author, @title = a, t
+       end
+     end
+   }
+
+   book = s.eval("Book.new('Stanislaw Lem', 'The Star Diaries')")
+
+ The Book object you get back is the same which was created in the sandbox.
+ And you can certainly access and redefine the sandboxed Book class as well.
+
+   Book = s.eval("Book")
+   class Book
+     def year
+       1970
+     end
+   end
+
+   s.eval("book.year")
+     #=> 1970
+

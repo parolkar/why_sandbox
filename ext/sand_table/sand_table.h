@@ -24,6 +24,8 @@
 
 extern st_table *rb_class_tbl;
 extern VALUE ruby_top_self;
+extern struct FRAME *ruby_frame;
+extern struct SCOPE *ruby_scope;
 
 #if RUBY_VERSION_CODE >= 185
 #define FFSAFE
@@ -99,6 +101,7 @@ typedef struct SANDKIT {
   VALUE _progname;
 #endif
 
+  struct SCOPE *scope;
   struct SANDKIT *banished;
 } sandkit;
 
