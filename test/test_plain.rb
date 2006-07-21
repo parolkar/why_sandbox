@@ -18,16 +18,30 @@ end
 module NestA
   module NestB
     class FirstClass
+      def na_nb_fc
+      end
     end
     class SecondClass
+      def na_nb_sc
+      end
+    end
+    def na_nb
+    end
+    def self.na_nb_k
     end
   end
 end
 
 module NestC
   class FirstClass < NestA::NestB::FirstClass
+    def nc_fc
+    end
   end
   class SecondClass < NestA::NestB::SecondClass
+    def nc_sc
+    end
+  end
+  def nc
   end
 end
 
@@ -93,24 +107,33 @@ class TestPlain < Test::Unit::TestCase
   def test_import_paths
     @s.import EmptyClass
     assert_equal EmptyClass.name, eval("EmptyClass.name")
-    # assert eval("EmptyClass.respond_to?(:empty_method)")
+    assert eval("EmptyClass.new.respond_to?(:empty_method)")
     @s.import OneNested::FirstClass
     assert_equal OneNested.name, eval("OneNested.name")
     assert_equal Module.name, eval("OneNested.class.name")
     assert_equal OneNested::FirstClass.name, eval("OneNested::FirstClass.name")
     @s.import NestC::FirstClass
     assert_equal NestC::FirstClass.name, eval("NestC::FirstClass.name")
+    assert eval("NestC::FirstClass.new.respond_to? :nc_fc")
+    assert eval("NestC::FirstClass.new.respond_to? :na_nb_fc")
     assert_equal NestA::NestB::FirstClass.name, eval("NestA::NestB::FirstClass.name")
+    assert eval("NestA::NestB::FirstClass.new.respond_to? :na_nb_fc")
     assert_equal NestA::NestB.class.name, eval("NestA::NestB.class.name")
+    assert eval("Object.new.extend(NestA::NestB).respond_to? :na_nb")
+    assert eval("NestA::NestB.respond_to? :na_nb_k")
     @s.import NestC::SecondClass
     assert_equal NestC::SecondClass.name, eval("NestC::SecondClass.name")
     assert_equal NestC::SecondClass.class.name, eval("NestC::SecondClass.class.name")
+    assert eval("NestC::SecondClass.new.respond_to? :nc_sc")
     assert_equal NestA::NestB::SecondClass.name, eval("NestA::NestB::SecondClass.name")
+    assert eval("NestA::NestB::SecondClass.new.respond_to? :na_nb_sc")
     assert_equal NestA::NestB.class.name, eval("NestA::NestB.class.name")
+    assert eval("Object.new.extend(NestA::NestB).respond_to? :na_nb")
     @s.import NestA::NestB::SecondClass
     @s.import NestC::SecondClass
     assert_equal NestC::SecondClass.name, eval("NestC::SecondClass.name")
     assert_equal NestC::SecondClass.class.name, eval("NestC::SecondClass.class.name")
+    assert eval("NestC::SecondClass.new.respond_to? :nc_sc")
     assert_equal NestA::NestB::SecondClass.name, eval("NestA::NestB::SecondClass.name")
     assert_equal NestA::NestB.class.name, eval("NestA::NestB.class.name")
   end

@@ -174,6 +174,52 @@ sandbox_str(kit, ptr)
   return (VALUE)str;
 }
 
+void
+sandbox_copy_method(klass, def, oklass, visi)
+  VALUE klass, oklass;
+  ID def;
+  int visi;
+{
+  NODE *body;
+     
+  body = rb_method_node(oklass, def);
+  if (!body) {
+    rb_warn("%s: no method %s found for copying", FREAKYFREAKY, rb_id2name(def));
+    return;
+  }
+  /* FIXME: why won't visi apply here? */
+  rb_add_method(klass, def, NEW_CFUNC(body->nd_cfnc, body->nd_argc), NOEX_PUBLIC);
+}
+
+static int
+sandbox_copy_method_i(name, type, argv)
+  ID name;
+  long type;
+  VALUE *argv;
+{
+  if (type == -1) return ST_CONTINUE;
+  sandbox_copy_method(argv[1], name, argv[0], ((type)&NOEX_MASK));
+  return ST_CONTINUE;
+}
+
+void
+sandbox_foreach_method(mod_from, mod_to, func)
+  VALUE mod_from, mod_to;
+  int (*func) _((ID, long, VALUE *));
+{
+  VALUE *argv = ALLOC_N(VALUE, 2);
+  argv[0] = mod_from;
+  argv[1] = mod_to;
+  st_foreach(RCLASS(mod_from)->m_tbl, func, (st_data_t)argv);
+
+  /* FIXME: to be pedantic, probably need to use FL_TEST() here? */
+  argv[0] = rb_singleton_class( mod_from );
+  argv[1] = rb_singleton_class( mod_to );
+  st_foreach(RCLASS(argv[0])->m_tbl, func, (st_data_t)argv);
+
+  free(argv);
+}
+
 VALUE
 sandbox_import_class_path(kit, path)
   sandkit *kit;
@@ -235,6 +281,7 @@ sandbox_import_class_path(kit, path)
           rb_raise(rb_eTypeError, "superclass mismatch for class %s", rb_class2name(RCLASS(c)->super));
         }
       case T_MODULE:
+        sandbox_foreach_method(c, kitc, sandbox_copy_method_i); 
         break;
       default:
         rb_raise(rb_eTypeError, "%s does not refer class/module", path);
