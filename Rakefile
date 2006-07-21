@@ -55,7 +55,6 @@ spec =
         
         s.required_ruby_version = '>= 1.8.5'
         s.require_path = "lib"
-        s.autorequire = "sandbox"
         s.extensions = FileList["ext/**/extconf.rb"].to_a
         s.bindir = "bin"
     end
@@ -93,6 +92,57 @@ file ext_so => ext_files do
   end
   cp ext_so, "lib"
 end
+
+PKG_FILES = FileList[
+  "test/**/*.{rb,html,xhtml}",
+  "lib/**/*.rb",
+  "ext/**/*.{c,rb,h,rl}",
+  "CHANGELOG", "README", "Rakefile", "COPYING",
+  "extras/**/*", "lib/sand_table.so"]
+
+Win32Spec = Gem::Specification.new do |s|
+  s.name = NAME
+  s.version = VERS
+  s.platform = Gem::Platform::WIN32
+  s.has_rdoc = false
+  s.extra_rdoc_files = ["README", "CHANGELOG", "COPYING"]
+  s.summary = "a freaky-freaky sandbox library, copies the symbol table, mounts it, evals..."
+  s.description = s.summary
+  s.author = "why the lucky stiff"
+  s.email = 'why@ruby-lang.org'
+  s.homepage = 'http://code.whytheluckystiff.net/svn/sandbox/'
+
+  s.files = PKG_FILES
+
+  s.require_path = "lib"
+  s.extensions = []
+  s.bindir = "bin"
+end
+  
+WIN32_PKG_DIR = "#{NAME}-#{VERS}"
+
+file WIN32_PKG_DIR => [:package] do
+  sh "tar zxf pkg/#{WIN32_PKG_DIR}.tgz"
+end
+
+desc "Cross-compile the sand_table extension for win32"
+file "sand_table_win32" => [WIN32_PKG_DIR] do
+  cp "extras/mingw-rbconfig.rb", "#{WIN32_PKG_DIR}/ext/sand_table/rbconfig.rb"
+  sh "cd #{WIN32_PKG_DIR}/ext/sand_table/ && ruby -I. extconf.rb && make"
+  mv "#{WIN32_PKG_DIR}/ext/sand_table/sand_table.so", "#{WIN32_PKG_DIR}/lib"
+end
+
+desc "Build the binary RubyGems package for win32"
+task :rubygems_win32 => ["sand_table_win32"] do
+  Dir.chdir("#{WIN32_PKG_DIR}") do
+    Gem::Builder.new(Win32Spec).build
+    verbose(true) {
+      mv Dir["*.gem"].first, "../pkg/#{WIN32_PKG_DIR}-mswin32.gem"
+    }
+  end
+end
+
+CLEAN.include WIN32_PKG_DIR
 
 task :install do
   sh %{rake package}
