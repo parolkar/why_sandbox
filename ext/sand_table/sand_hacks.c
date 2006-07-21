@@ -174,6 +174,76 @@ sandbox_str(kit, ptr)
   return (VALUE)str;
 }
 
+VALUE
+sandbox_import_class_path(kit, path)
+  sandkit *kit;
+  const char *path;
+{
+  const char *pbeg, *p;
+  ID id;
+  VALUE c = rb_cObject;
+  VALUE kitc = kit->cObject;
+
+  if (path[0] == '#') {
+    rb_raise(rb_eArgError, "can't import anonymous class %s", path);
+  }
+  pbeg = p = path;
+  while (*p) {
+    VALUE str;
+
+    while (*p && *p != ':') p++;
+    str = rb_str_new(pbeg, p-pbeg);
+    id = rb_intern(RSTRING(str)->ptr);
+    if (p[0] == ':') {
+      if (p[1] != ':') goto undefined_class;
+      p += 2;
+      pbeg = p;
+    }
+    if (!rb_const_defined(c, id)) {
+      undefined_class:
+        rb_raise(rb_eArgError, "undefined class/module %.*s", p-path, path);
+    }
+    c = rb_const_get_at(c, id);
+    if (!rb_const_defined(kitc, id)) {
+      VALUE super = sandbox_import_class_path(kit, rb_class2name(RCLASS(c)->super));
+      if (kitc == kit->cObject) {
+        switch (TYPE(c)) {
+          case T_MODULE:
+            kitc = sandbox_defmodule(kit, RSTRING(str)->ptr);
+          break;
+          case T_CLASS:
+            kitc = sandbox_defclass(kit, RSTRING(str)->ptr, super);
+          break;
+        }
+      } else {
+        switch (TYPE(c)) {
+          case T_MODULE:
+            kitc = rb_define_module_under(kitc, RSTRING(str)->ptr);
+          break;
+          case T_CLASS:
+            kitc = rb_define_class_under(kitc, RSTRING(str)->ptr, super);
+          break;
+        }
+      }
+    } else {
+      kitc = rb_const_get_at(kitc, id);
+    }
+    switch (TYPE(c)) {
+      case T_CLASS:
+        if (0 != rb_str_cmp(rb_class_name(RCLASS(c)->super), rb_class_name(RCLASS(kitc)->super)))
+        {
+          rb_raise(rb_eTypeError, "superclass mismatch for class %s", rb_class2name(RCLASS(c)->super));
+        }
+      case T_MODULE:
+        break;
+      default:
+        rb_raise(rb_eTypeError, "%s does not refer class/module", path);
+    }
+  } 
+  
+  return c;
+} 
+
 #ifdef FFSAFE
 struct trace_var {
   int removed;

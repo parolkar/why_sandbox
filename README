@@ -50,7 +50,8 @@ _______________________________________________________________________________
      end
    }
 
-   book = s.eval("Book.new('Stanislaw Lem', 'The Star Diaries')")
+   book = s.eval("book = Book.new('Stanislaw Lem', 'The Star Diaries')")
+     #=> #<Book ...>
 
  The Book object you get back is the same which was created in the sandbox.
  And you can certainly access and redefine the sandboxed Book class as well.
@@ -65,3 +66,6 @@ _______________________________________________________________________________
    s.eval("book.year")
      #=> 1970
 
+ If you do a lot of back and forth with the sandboxes, it can be tough to keep
+ track of what classes are in the sandbox and what's in main.  Especially since
+ most sandboxes start to get a bit behind method-wise.

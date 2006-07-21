@@ -385,6 +385,17 @@ sandbox_load( self, path )
 }
 
 VALUE
+sandbox_import( self, klass )
+  VALUE self, klass;
+{
+  VALUE sandklass;
+  sandkit *kit;
+  Data_Get_Struct( self, sandkit, kit );
+  sandklass = sandbox_import_class_path( kit, rb_class2name( klass ) );
+  return Qnil;
+}
+
+VALUE
 sandbox_safe_go_go_go(go)
   go_cart *go;
 {
@@ -1390,6 +1401,7 @@ void Init_sand_table()
   rb_define_alloc_func( cSandbox, sandbox_alloc );
   rb_define_method( cSandbox, "eval", sandbox_eval, 1 );
   rb_define_method( cSandbox, "load", sandbox_load, 1 );
+  rb_define_method( cSandbox, "import", sandbox_import, 1 );
 #ifdef FFSAFE
   rb_define_singleton_method( cSandbox, "safe", sandbox_safe, 0 );
   cSandboxSafe = rb_define_class_under(cSandbox, "Safe", cSandbox);
