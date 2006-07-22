@@ -9,7 +9,7 @@ include FileUtils
 NAME = "sandbox"
 REV = File.read(".svn/entries")[/committed-rev="(\d+)"/, 1] rescue nil
 VERS = "0.0" + (REV ? ".#{REV}" : "")
-CLEAN.include ['ext/sand_table/*.{bundle,so,obj,pdb,lib,def,exp}', 'ext/sand_table/Makefile', 
+CLEAN.include ['ext/sand_table/*.{bundle,o,so,obj,pdb,lib,def,exp}', 'ext/sand_table/Makefile', 
                '**/.*.sw?', '*.gem', '.config']
 
 desc "Does a full compile, test run"
@@ -47,7 +47,7 @@ spec =
         s.description = s.summary
         s.author = "why the lucky stiff"
         s.email = 'why@ruby-lang.org'
-        s.homepage = 'http://code.whytheluckystiff.net/svn/sandbox/'
+        s.homepage = 'http://code.whytheluckystiff.net/sandbox/'
 
         s.files = %w(COPYING README Rakefile) +
           Dir.glob("{bin,doc,test,lib,extras}/**/*") + 

@@ -34,6 +34,7 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->cHash);
   rb_gc_mark_maybe(kit->cInteger);
   rb_gc_mark_maybe(kit->cMatch);
+  rb_gc_mark_maybe(kit->cMethod);
   rb_gc_mark_maybe(kit->cNilClass);
   rb_gc_mark_maybe(kit->cNumeric);
   rb_gc_mark_maybe(kit->mPrecision);
@@ -44,6 +45,7 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->cStruct);
   rb_gc_mark_maybe(kit->cSymbol);
   rb_gc_mark_maybe(kit->cTrueClass);
+  rb_gc_mark_maybe(kit->cUnboundMethod);
   rb_gc_mark_maybe(kit->eStandardError);
   rb_gc_mark_maybe(kit->eSystemExit);
   rb_gc_mark_maybe(kit->eInterrupt);
@@ -57,6 +59,7 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->eRuntimeError);
   rb_gc_mark_maybe(kit->eSecurityError);
   rb_gc_mark_maybe(kit->eSystemCallError);
+  rb_gc_mark_maybe(kit->eSysStackError);
   rb_gc_mark_maybe(kit->eTypeError);
   rb_gc_mark_maybe(kit->eZeroDivError);
   rb_gc_mark_maybe(kit->eNotImpError);
@@ -69,6 +72,7 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->eSyntaxError);
   rb_gc_mark_maybe(kit->eLoadError);
   rb_gc_mark_maybe(kit->eLocalJumpError);
+  rb_gc_mark_maybe(kit->mErrno);
 #ifdef FFSAFE
   if (kit->globals != NULL)
     sandbox_mark_globals(kit->globals);
@@ -177,14 +181,18 @@ sandbox_whoa_whoa_whoa(go)
   rb_eNameError = norm->eNameError;
   rb_eSyntaxError = norm->eSyntaxError;
   rb_eLoadError = norm->eLoadError;
+  rb_eLocalJumpError = norm->eLocalJumpError;
+  rb_mErrno = norm->mErrno;
   ruby_top_self = norm->oMain;
   ruby_scope = norm->scope;
 #ifdef FFSAFE
   rb_global_tbl = norm->globals;
   rb_cMatch = norm->cMatch;
+  rb_cMethod = norm->cMethod;
+  rb_cUnboundMethod = norm->cUnboundMethod;
   rb_eRegexpError = norm->eRegexpError;
   rb_cNameErrorMesg = norm->cNameErrorMesg;
-  rb_eLocalJumpError = norm->eLocalJumpError;
+  rb_eSysStackError = norm->eSysStackError;
 #endif
 
   go->kit->banished = NULL;
@@ -252,14 +260,18 @@ sandbox_swap_in( self )
   norm->eNameError = rb_eNameError;
   norm->eSyntaxError = rb_eSyntaxError;
   norm->eLoadError = rb_eLoadError;
+  norm->eLocalJumpError = rb_eLocalJumpError;
+  norm->mErrno = rb_mErrno;
   norm->oMain = ruby_top_self;
   norm->scope = ruby_scope;
 #ifdef FFSAFE
   norm->globals = rb_global_tbl;
   norm->cMatch = rb_cMatch;
+  norm->cMethod = rb_cMethod;
+  norm->cUnboundMethod = rb_cUnboundMethod;
   norm->eRegexpError = rb_eRegexpError;
   norm->cNameErrorMesg = rb_cNameErrorMesg;
-  norm->eLocalJumpError = rb_eLocalJumpError;
+  norm->eSysStackError = rb_eSysStackError;
 #endif
 
   /* replace everything */
@@ -312,14 +324,18 @@ sandbox_swap_in( self )
   rb_eNameError = kit->eNameError;
   rb_eSyntaxError = kit->eSyntaxError;
   rb_eLoadError = kit->eLoadError;
+  rb_eLocalJumpError = kit->eLocalJumpError;
+  rb_mErrno = kit->mErrno;
   ruby_top_self = kit->oMain;
   ruby_scope = kit->scope;
 #ifdef FFSAFE
   rb_global_tbl = kit->globals;
   rb_cMatch = kit->cMatch;
+  rb_cMethod = kit->cMethod;
+  rb_cUnboundMethod = kit->cUnboundMethod;
   rb_eRegexpError = kit->eRegexpError;
   rb_cNameErrorMesg = kit->cNameErrorMesg;
-  rb_eLocalJumpError = kit->eLocalJumpError;
+  rb_eSysStackError = kit->eSysStackError;
 #endif
 
   go = ALLOC(go_cart);
@@ -668,12 +684,14 @@ Init_kit(kit)
   SAND_COPY_KERNEL("raise");
   SAND_COPY_KERNEL("fail");
 
-  SAND_COPY_KERNEL("caller");
+  /* FIXME: reimplement and test_exploits.rb(test_caller) */
+  /* SAND_COPY_KERNEL("caller"); */
 
   SAND_COPY_KERNEL("exit");
   SAND_COPY_KERNEL("abort");
 
-  SAND_COPY_KERNEL("at_exit");
+  /* FIXME: reimplement */
+  /* SAND_COPY_KERNEL("at_exit"); */
 
   SAND_COPY_KERNEL("catch");
   SAND_COPY_KERNEL("throw");
@@ -903,20 +921,20 @@ Init_kit(kit)
 
   /*
   syserr_tbl = st_init_numtable();
+  */
+#ifndef FFSAFE
+  VALUE rb_eSystemCallError = rb_const_get(rb_cObject, rb_intern("SystemCallError"));
+#endif
   kit->eSystemCallError = sandbox_defclass(kit, "SystemCallError", kit->eStandardError);
   SAND_COPY(eSystemCallError, "initialize");
   SAND_COPY(eSystemCallError, "errno");
-  rb_define_singleton_method(rb_eSystemCallError, "===", syserr_eqq, 1);
-  */
+  SAND_COPY_S(eSystemCallError, "===");
 
-  /*
   kit->mErrno = sandbox_defmodule(kit, "Errno");
+  /*
   rb_define_global_function("warn", rb_warn_m, 1);
   */
 
-#ifndef FFSAFE
-  VALUE rb_eLocalJumpError = rb_const_get(rb_cObject, rb_intern("LocalJumpError"));
-#endif
   kit->eLocalJumpError = sandbox_defclass(kit, "LocalJumpError", kit->eStandardError);
   SAND_COPY(eLocalJumpError, "exit_value");
   SAND_COPY(eLocalJumpError, "reason");
@@ -924,56 +942,69 @@ Init_kit(kit)
 /*
   rb_global_variable(&exception_error);
   exception_error = rb_exc_new2(rb_eFatal, "exception reentered");
+*/
 
-  rb_eSysStackError = rb_define_class("SystemStackError", rb_eStandardError);
+#ifndef FFSAFE
+  VALUE rb_eSysStackError = rb_const_get(rb_cObject, rb_intern("SystemStackError"));
+#endif
+  kit->eSysStackError = sandbox_defclass(kit, "SystemStackError", kit->eStandardError);
+/*
+  FIXME: 1.8.5 needs the sysstack_error and exception_error exposed. 
+         Or does it?  Can the user really catch this since it's not descended from Object?
+         Will the global and a general rescue expose a hole?
+  FIXME: ruby_errinfo? trace_func? cont_protect?
   rb_global_variable(&sysstack_error);
   sysstack_error = rb_exc_new2(rb_eSysStackError, "stack level too deep");
   OBJ_TAINT(sysstack_error);
-
-  rb_cProc = rb_define_class("Proc", rb_cObject);
-  rb_undef_alloc_func(rb_cProc);
-  rb_define_singleton_method(rb_cProc, "new", proc_s_new, -1);
-
-  rb_define_method(rb_cProc, "clone", proc_clone, 0);
-  rb_define_method(rb_cProc, "dup", proc_dup, 0);
-  rb_define_method(rb_cProc, "call", proc_call, -2);
-  rb_define_method(rb_cProc, "arity", proc_arity, 0);
-  rb_define_method(rb_cProc, "[]", proc_call, -2);
-  rb_define_method(rb_cProc, "==", proc_eq, 1);
-  rb_define_method(rb_cProc, "to_s", proc_to_s, 0);
-  rb_define_method(rb_cProc, "to_proc", proc_to_self, 0);
-  rb_define_method(rb_cProc, "binding", proc_binding, 0);
-
-  rb_define_global_function("proc", proc_lambda, 0);
-  rb_define_global_function("lambda", proc_lambda, 0);
-
-  rb_cMethod = rb_define_class("Method", rb_cObject);
-  rb_undef_alloc_func(rb_cMethod);
-  rb_undef_method(CLASS_OF(rb_cMethod), "new");
-  rb_define_method(rb_cMethod, "==", method_eq, 1);
-  rb_define_method(rb_cMethod, "clone", method_clone, 0);
-  rb_define_method(rb_cMethod, "call", method_call, -1);
-  rb_define_method(rb_cMethod, "[]", method_call, -1);
-  rb_define_method(rb_cMethod, "arity", method_arity, 0);
-  rb_define_method(rb_cMethod, "inspect", method_inspect, 0);
-  rb_define_method(rb_cMethod, "to_s", method_inspect, 0);
-  rb_define_method(rb_cMethod, "to_proc", method_proc, 0);
-  rb_define_method(rb_cMethod, "unbind", method_unbind, 0);
 */
+
+  kit->cProc = sandbox_defclass(kit, "Proc", kit->cObject);
+  rb_undef_alloc_func(kit->cProc);
+  SAND_COPY_S(cProc, "new");
+
+  SAND_COPY(cProc, "clone");
+  SAND_COPY(cProc, "dup");
+  SAND_COPY(cProc, "call");
+  SAND_COPY(cProc, "arity");
+  SAND_COPY(cProc, "[]");
+  SAND_COPY(cProc, "==");
+  SAND_COPY(cProc, "to_s");
+  SAND_COPY(cProc, "to_proc");
+  SAND_COPY(cProc, "binding");
+
+  SAND_COPY_KERNEL("proc");
+  SAND_COPY_KERNEL("lambda");
+
+#ifndef FFSAFE
+  VALUE rb_cMethod= rb_const_get(rb_cObject, rb_intern("Method"));
+#endif
+  kit->cMethod = sandbox_defclass(kit, "Method", kit->cObject);
+  rb_undef_alloc_func(kit->cMethod);
+  SAND_UNDEF(cMethod, "new");
+  SAND_COPY(cMethod, "==");
+  SAND_COPY(cMethod, "clone");
+  SAND_COPY(cMethod, "call");
+  SAND_COPY(cMethod, "[]");
+  SAND_COPY(cMethod, "arity");
+  SAND_COPY(cMethod, "inspect");
+  SAND_COPY(cMethod, "to_s");
+  SAND_COPY(cMethod, "to_proc");
+  SAND_COPY(cMethod, "unbind");
   SAND_COPY(mKernel, "method");
 
-/*
-  rb_cUnboundMethod = rb_define_class("UnboundMethod", rb_cObject);
-  rb_undef_alloc_func(rb_cUnboundMethod);
-  rb_undef_method(CLASS_OF(rb_cUnboundMethod), "new");
-  rb_define_method(rb_cUnboundMethod, "==", method_eq, 1);
-  rb_define_method(rb_cUnboundMethod, "clone", method_clone, 0);
-  rb_define_method(rb_cUnboundMethod, "arity", method_arity, 0);
-  rb_define_method(rb_cUnboundMethod, "inspect", method_inspect, 0);
-  rb_define_method(rb_cUnboundMethod, "to_s", method_inspect, 0);
-  rb_define_method(rb_cUnboundMethod, "bind", umethod_bind, 1);
-  rb_define_method(rb_cModule, "instance_method", rb_mod_method, 1);
-*/
+#ifndef FFSAFE
+  VALUE rb_cUnboundMethod = rb_const_get(rb_cObject, rb_intern("UnboundMethod"));
+#endif
+  kit->cUnboundMethod = sandbox_defclass(kit, "UnboundMethod", kit->cObject);
+  rb_undef_alloc_func(kit->cUnboundMethod);
+  SAND_UNDEF(cUnboundMethod, "new");
+  SAND_COPY(cUnboundMethod, "==");
+  SAND_COPY(cUnboundMethod, "clone");
+  SAND_COPY(cUnboundMethod, "arity");
+  SAND_COPY(cUnboundMethod, "inspect");
+  SAND_COPY(cUnboundMethod, "to_s");
+  SAND_COPY(cUnboundMethod, "bind");
+  SAND_COPY(cModule, "instance_method");
 
   kit->eZeroDivError = sandbox_defclass(kit, "ZeroDivisionError", kit->eStandardError);
   kit->eFloatDomainError = sandbox_defclass(kit, "FloatDomainError", kit->eRangeError);
@@ -1155,6 +1186,7 @@ Init_kit(kit)
   SAND_COPY(cBignum, "abs");
   SAND_COPY(cBignum, "size");
 
+  /* FIXME: rb_output_fs */
   kit->cArray  = sandbox_defclass(kit, "Array", kit->cObject);
   rb_include_module(kit->cArray, kit->mEnumerable);
 
@@ -1374,6 +1406,7 @@ Init_kit(kit)
   SAND_COPY_CONST(cRegexp, "EXTENDED");
   SAND_COPY_CONST(cRegexp, "MULTILINE");
 
+  /* FIXME: what to do about the reg_cache? oh definitely swap. */
   /* rb_global_variable(&reg_cache); */
 
 #ifndef FFSAFE
@@ -1428,6 +1461,30 @@ Init_kit(kit)
   SAND_COPY(mKernel, "hash");
   SAND_COPY(mKernel, "__id__");
   SAND_COPY(mKernel, "object_id");
+
+  /*
+   * dir.c:static VALUE chdir_thread = Qnil;
+   * eval.c:VALUE rb_load_path;
+   * eval.c:VALUE ruby_dln_librefs;
+   * eval.c:static VALUE rb_features;
+   * eval.c:extern VALUE rb_last_status;
+   * eval.c:static VALUE th_raise_exception;
+   * eval.c:static VALUE th_cmd;
+   * eval.c:extern VALUE *rb_gc_stack_start;
+   * eval.c:static VALUE thgroup_default;
+   * file.c:static VALUE separator;
+   * file.c:VALUE rb_mFConst;
+   * gc.c:static VALUE nomem_error;
+   * gc.c:VALUE rb_mGC;
+   * gc.c:VALUE *rb_gc_stack_start = 0;
+   * gc.c:static VALUE mark_stack[MARK_STACK_MAX];
+   * gc.c:static VALUE *mark_stack_ptr;
+   * gc.c:static VALUE finalizers;
+   * hash.c:static VALUE envtbl;
+   * io.c:VALUE rb_rs;
+   * io.c:VALUE rb_output_rs;
+   * io.c:VALUE rb_default_rs;
+   */
 #ifdef FFSAFE
   kit->_progname = sandbox_str(kit, "(sandbox)");
   sandbox_define_hooked_variable(kit, "$0", &kit->_progname, 0, 0);

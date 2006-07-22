@@ -30,10 +30,6 @@ extern struct SCOPE *ruby_scope;
 #if RUBY_VERSION_CODE >= 185
 #define FFSAFE
 extern st_table *rb_global_tbl;
-extern VALUE rb_eRegexpError;
-extern VALUE rb_cMatch;
-extern VALUE rb_cNameErrorMesg;
-extern VALUE rb_eLocalJumpError;
 #else
 #warning "** Sandbox will NOT be safe unless used with 1.8.5 -- Proceeding anyway! **"
 #endif
@@ -44,6 +40,12 @@ extern "C" {
 
 typedef struct SANDKIT {
   st_table *tbl;
+
+#ifdef FFSAFE
+  st_table *globals;
+  VALUE _progname;
+#endif
+
   VALUE cObject;
   VALUE cModule;
   VALUE cClass;
@@ -61,6 +63,7 @@ typedef struct SANDKIT {
   VALUE cHash;
   VALUE cInteger;
   VALUE cMatch;
+  VALUE cMethod;
   VALUE cNilClass;
   VALUE cNumeric;
   VALUE mPrecision;
@@ -71,6 +74,7 @@ typedef struct SANDKIT {
   VALUE cStruct;
   VALUE cSymbol;
   VALUE cTrueClass;
+  VALUE cUnboundMethod;
   VALUE eStandardError;
   VALUE eSystemExit;
   VALUE eInterrupt;
@@ -85,6 +89,7 @@ typedef struct SANDKIT {
   VALUE eRuntimeError;
   VALUE eSecurityError;
   VALUE eSystemCallError;
+  VALUE eSysStackError;
   VALUE eTypeError;
   VALUE eZeroDivError;
   VALUE eNotImpError;
@@ -97,11 +102,7 @@ typedef struct SANDKIT {
   VALUE eSyntaxError;
   VALUE eLoadError;
   VALUE eLocalJumpError;
-
-#ifdef FFSAFE
-  st_table *globals;
-  VALUE _progname;
-#endif
+  VALUE mErrno;
 
   struct SCOPE *scope;
   struct SANDKIT *banished;
