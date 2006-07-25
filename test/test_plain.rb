@@ -49,6 +49,9 @@ class WeirdInherit < NestA::NestB::SecondClass
   module A; end
 end
 
+class ConstructorTest
+end
+
 class TestPlain < Test::Unit::TestCase
   def path(p)
     File.join(File.dirname(__FILE__), p)
@@ -149,5 +152,17 @@ class TestPlain < Test::Unit::TestCase
   end
 
   def test_import_methods
+  end
+
+  def test_import_ctor
+    s = Sandbox.new( :import => [ConstructorTest] )
+    assert_equal ConstructorTest.name, s.eval("ConstructorTest.name")
+    assert_nil eval("ConstructorTest.name rescue nil")
+  end
+
+  def test_init_ctor
+    s = Sandbox.new( :init => [:load] )
+    assert s.eval("Kernel.respond_to? :load")
+    assert ! eval("Kernel.respond_to? :load")
   end
 end

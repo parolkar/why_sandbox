@@ -8,7 +8,10 @@
  */
 #include "sand_table.h"
 
+static VALUE Qimport, Qinit, Qload;
+
 static void Init_kit _((sandkit *));
+static void Init_kit_load _((sandkit *));
 
 static void
 mark_sandbox(kit)
@@ -118,6 +121,56 @@ sandbox_alloc(class)
   kit->scope = _scope;
 
   return Data_Wrap_Struct( class, mark_sandbox, free_sandbox, kit );
+}
+
+static VALUE
+sandbox_initialize(argc, argv, self)
+  int argc;
+  VALUE *argv;
+  VALUE self;
+{
+  VALUE opts, import, init;
+  if (rb_scan_args(argc, argv, "01", &opts) == 0)
+  {
+    opts = rb_hash_new();
+  }
+  else
+  {
+    Check_Type(opts, T_HASH);
+  }
+
+  init = rb_hash_aref(opts, Qinit);
+  if (!NIL_P(init))
+  {
+    int i;
+    sandkit *kit;
+    Check_Type(init, T_ARRAY);
+    Data_Get_Struct( self, sandkit, kit );
+    for ( i = 0; i < RARRAY(init)->len; i++ )
+    {
+      VALUE mod = rb_ary_entry(init, i);
+      if ( mod == Qload )
+      {
+        Init_kit_load(kit);
+      }
+      else
+      {
+        rb_raise(rb_eArgError, "no %s module for the sandbox", mod);
+      }
+    }
+  }
+
+  import = rb_hash_aref(opts, Qimport);
+  if (!NIL_P(import))
+  {
+    int i;
+    Check_Type(import, T_ARRAY);
+    for ( i = 0; i < RARRAY(import)->len; i++ )
+    {
+      rb_funcall(self, rb_intern("import"), 1, rb_ary_entry(import, i));
+    }
+  }
+  return self;
 }
 
 typedef struct {
@@ -1491,12 +1544,43 @@ Init_kit(kit)
 #endif
 }
 
+static void
+Init_kit_load(kit)
+  sandkit *kit;
+{
+  /*
+  rb_define_readonly_variable("$:", &rb_load_path);
+  rb_define_readonly_variable("$-I", &rb_load_path);
+  rb_define_readonly_variable("$LOAD_PATH", &rb_load_path);
+  rb_load_path = rb_ary_new();
+
+  rb_define_readonly_variable("$\"", &rb_features);
+  rb_define_readonly_variable("$LOADED_FEATURES", &rb_features);
+  rb_features = rb_ary_new();
+  */
+
+  SAND_COPY_KERNEL("load");
+  SAND_COPY_KERNEL("require");
+  SAND_COPY_KERNEL("autoload");
+  SAND_COPY_KERNEL("autoload?");
+  SAND_COPY(cModule, "autoload");
+  SAND_COPY(cModule, "autoload?");
+
+  /*
+  rb_global_variable(&ruby_wrapper);
+
+  rb_global_variable(&ruby_dln_librefs);
+  ruby_dln_librefs = rb_ary_new();
+  */
+}
+
 void Init_sand_table()
 {
   VALUE cSandbox = rb_define_class("Sandbox", rb_cObject);
   rb_define_const( cSandbox, "VERSION", rb_str_new2( SAND_VERSION ) );
   rb_define_const( cSandbox, "REV_ID", rb_str_new2( SAND_REV_ID ) );
   rb_define_alloc_func( cSandbox, sandbox_alloc );
+  rb_define_method( cSandbox, "initialize", sandbox_initialize, -1 );
   rb_define_method( cSandbox, "eval", sandbox_eval, 1 );
   rb_define_method( cSandbox, "load", sandbox_load, 1 );
   rb_define_method( cSandbox, "import", sandbox_import, 1 );
@@ -1506,4 +1590,7 @@ void Init_sand_table()
   rb_define_method( cSandboxSafe, "eval", sandbox_safe_eval, 1 );
   rb_define_method( cSandboxSafe, "load", sandbox_safe_load, 1 );
 #endif
+  Qinit = ID2SYM(rb_intern("init"));
+  Qimport = ID2SYM(rb_intern("import"));
+  Qload = ID2SYM(rb_intern("load"));
 }
