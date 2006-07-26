@@ -57,7 +57,7 @@ spec =
         s.require_path = "lib"
         s.extensions = FileList["ext/**/extconf.rb"].to_a
         s.bindir = "bin"
-        s.executables = ['sandbox-server']
+        s.executables = ['sandbox_server']
     end
 
 Rake::GemPackageTask.new(spec) do |p|
