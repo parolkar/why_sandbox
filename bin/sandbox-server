@@ -1,0 +1,6 @@
+#!/usr/bin/env ruby
+require 'drb/drb'
+require 'irb'
+require 'sandbox/server'
+
+Sandbox::IRBServer.new("localhost", 8787).run.join

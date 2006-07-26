@@ -11,7 +11,6 @@
 #define SAND_TABLE_H
 
 #define SAND_VERSION "0.0"
-#define SAND_REV_ID "$Rev$"
 
 #define FREAKYFREAKY "freakyfreakysandbox"
 
@@ -104,8 +103,23 @@ typedef struct SANDKIT {
   VALUE eLocalJumpError;
   VALUE mErrno;
 
+  VALUE load_path;
+  VALUE loaded_features;
+  VALUE wrapper;
+  VALUE klass;
+  VALUE dln_librefs;
+  st_table *loading_tbl;
+
+  int safe_level;
+  unsigned long block_unique;
+  unsigned long frame_unique;
+  struct BLOCK *block;
+  struct FRAME *frame;
+  struct FRAME *top_frame;
   struct SCOPE *scope;
+  struct SCOPE *top_scope;
   struct SANDKIT *banished;
+  NODE *current_node;
 } sandkit;
 
 #define SAND_COPY(K, M) sandbox_copy_method(kit->K, rb_intern(M), rb_##K, NOEX_PUBLIC);

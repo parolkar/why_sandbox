@@ -8,6 +8,8 @@
  */
 #include "sand_table.h"
 
+#define SAND_REV_ID "$Rev$"
+
 static VALUE Qimport, Qinit, Qload;
 
 static void Init_kit _((sandkit *));
@@ -1538,6 +1540,8 @@ Init_kit(kit)
    * io.c:VALUE rb_output_rs;
    * io.c:VALUE rb_default_rs;
    */
+  kit->load_path = rb_ary_new();
+  kit->loaded_features = rb_ary_new();
 #ifdef FFSAFE
   kit->_progname = sandbox_str(kit, "(sandbox)");
   sandbox_define_hooked_variable(kit, "$0", &kit->_progname, 0, 0);
@@ -1548,23 +1552,21 @@ static void
 Init_kit_load(kit)
   sandkit *kit;
 {
-  /*
-  rb_define_readonly_variable("$:", &rb_load_path);
-  rb_define_readonly_variable("$-I", &rb_load_path);
-  rb_define_readonly_variable("$LOAD_PATH", &rb_load_path);
-  rb_load_path = rb_ary_new();
+  rb_define_readonly_variable("$:", &kit->load_path);
+  rb_define_readonly_variable("$-I", &kit->load_path);
+  rb_define_readonly_variable("$LOAD_PATH", &kit->load_path);
 
-  rb_define_readonly_variable("$\"", &rb_features);
-  rb_define_readonly_variable("$LOADED_FEATURES", &rb_features);
-  rb_features = rb_ary_new();
-  */
+  rb_define_readonly_variable("$\"", &kit->loaded_features);
+  rb_define_readonly_variable("$LOADED_FEATURES", &kit->loaded_features);
 
   SAND_COPY_KERNEL("load");
   SAND_COPY_KERNEL("require");
-  SAND_COPY_KERNEL("autoload");
-  SAND_COPY_KERNEL("autoload?");
-  SAND_COPY(cModule, "autoload");
-  SAND_COPY(cModule, "autoload?");
+  /*
+  rb_define_method(rb_cModule, "autoload",  rb_mod_autoload,   2);
+  rb_define_method(rb_cModule, "autoload?", rb_mod_autoload_p, 1);
+  rb_define_global_function("autoload",  rb_f_autoload,   2);
+  rb_define_global_function("autoload?", rb_f_autoload_p, 1);
+  */
 
   /*
   rb_global_variable(&ruby_wrapper);

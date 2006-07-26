@@ -1,0 +1,21 @@
+#!/usr/bin/env ruby
+require 'irb'
+require 'sandbox/server'
+
+class InOut
+  def gets
+    STDIN.gets
+  end
+  def print(*a)
+    STDOUT.print *a
+  end
+  def puts(*a)
+    STDOUT.puts *a
+  end
+  def eof?
+    false
+  end
+end
+
+puts "Sandbox IRB (v#{Sandbox::BUILD})"
+Sandbox::IRB.new(Sandbox.new).start(InOut.new)
