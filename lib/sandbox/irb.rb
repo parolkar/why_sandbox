@@ -1,3 +1,4 @@
+require 'irb'
 require 'sandbox'
 
 class Sandbox::IRB

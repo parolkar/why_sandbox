@@ -1,3 +1,4 @@
+require 'socket'
 require 'sandbox/irb'
 
 class Sandbox::IRBServer

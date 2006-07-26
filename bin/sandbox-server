@@ -1,6 +1,34 @@
 #!/usr/bin/env ruby
-require 'drb/drb'
-require 'irb'
+require 'optparse'
+require 'ostruct'
 require 'sandbox/server'
 
-Sandbox::IRBServer.new("localhost", 8787).run.join
+conf = OpenStruct.new(:host => '0.0.0.0', :port => 5000)
+opts = OptionParser.new do |opts|
+    opts.banner = "Usage: sandbox-server"
+    opts.define_head "#{File.basename($0)}, offering sessions for #{RUBY_VERSION} (#{RUBY_RELEASE_DATE}) [#{RUBY_PLATFORM}]"
+    opts.separator ""
+    opts.separator "Specific options:"
+
+    opts.on("-h", "--host HOSTNAME", "Host for sandbox server to bind to (default is all IPs)") { |conf.host| }
+    opts.on("-p", "--port NUM", "Port to serve on (defaults to #{conf.port})") { |conf.port| }
+
+    opts.separator ""
+    opts.separator "Common options:"
+  
+    # No argument, shows at tail.  This will print an options summary.
+    # Try it and see!
+    opts.on_tail("-?", "--help", "Show this message") do
+        puts opts
+        exit
+    end
+  
+    # Another typical switch to print the version.
+    opts.on_tail("-v", "--version", "Show version") do
+        class << Gem; attr_accessor :loaded_specs; end
+        puts Gem.loaded_specs['sandbox'].version
+        exit
+    end
+end
+
+Sandbox::IRBServer.new(conf.host, conf.port).run.join
