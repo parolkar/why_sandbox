@@ -97,6 +97,7 @@ end
 PKG_FILES = FileList[
   "test/**/*.{rb,html,xhtml}",
   "lib/**/*.rb",
+  "bin/**/*",
   "ext/**/*.{c,rb,h,rl}",
   "CHANGELOG", "README", "Rakefile", "COPYING",
   "extras/**/*", "lib/sand_table.so"]
@@ -118,6 +119,7 @@ Win32Spec = Gem::Specification.new do |s|
   s.require_path = "lib"
   s.extensions = []
   s.bindir = "bin"
+  s.executables = ['sandbox_server']
 end
   
 WIN32_PKG_DIR = "#{NAME}-#{VERS}"
