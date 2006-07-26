@@ -236,7 +236,6 @@ sandbox_whoa_whoa_whoa(go)
   rb_eNameError = norm->eNameError;
   rb_eSyntaxError = norm->eSyntaxError;
   rb_eLoadError = norm->eLoadError;
-  rb_eLocalJumpError = norm->eLocalJumpError;
   rb_mErrno = norm->mErrno;
   ruby_top_self = norm->oMain;
   ruby_scope = norm->scope;
@@ -248,6 +247,7 @@ sandbox_whoa_whoa_whoa(go)
   rb_eRegexpError = norm->eRegexpError;
   rb_cNameErrorMesg = norm->cNameErrorMesg;
   rb_eSysStackError = norm->eSysStackError;
+  rb_eLocalJumpError = norm->eLocalJumpError;
 #endif
 
   go->kit->banished = NULL;
@@ -315,7 +315,6 @@ sandbox_swap_in( self )
   norm->eNameError = rb_eNameError;
   norm->eSyntaxError = rb_eSyntaxError;
   norm->eLoadError = rb_eLoadError;
-  norm->eLocalJumpError = rb_eLocalJumpError;
   norm->mErrno = rb_mErrno;
   norm->oMain = ruby_top_self;
   norm->scope = ruby_scope;
@@ -327,6 +326,7 @@ sandbox_swap_in( self )
   norm->eRegexpError = rb_eRegexpError;
   norm->cNameErrorMesg = rb_cNameErrorMesg;
   norm->eSysStackError = rb_eSysStackError;
+  norm->eLocalJumpError = rb_eLocalJumpError;
 #endif
 
   /* replace everything */
@@ -379,7 +379,6 @@ sandbox_swap_in( self )
   rb_eNameError = kit->eNameError;
   rb_eSyntaxError = kit->eSyntaxError;
   rb_eLoadError = kit->eLoadError;
-  rb_eLocalJumpError = kit->eLocalJumpError;
   rb_mErrno = kit->mErrno;
   ruby_top_self = kit->oMain;
   ruby_scope = kit->scope;
@@ -391,6 +390,7 @@ sandbox_swap_in( self )
   rb_eRegexpError = kit->eRegexpError;
   rb_cNameErrorMesg = kit->cNameErrorMesg;
   rb_eSysStackError = kit->eSysStackError;
+  rb_eLocalJumpError = kit->eLocalJumpError;
 #endif
 
   go = ALLOC(go_cart);
@@ -990,6 +990,9 @@ Init_kit(kit)
   rb_define_global_function("warn", rb_warn_m, 1);
   */
 
+#ifndef FFSAFE
+  VALUE rb_eLocalJumpError = rb_const_get(rb_cObject, rb_intern("LocalJumpError"));
+#endif
   kit->eLocalJumpError = sandbox_defclass(kit, "LocalJumpError", kit->eStandardError);
   SAND_COPY(eLocalJumpError, "exit_value");
   SAND_COPY(eLocalJumpError, "reason");
