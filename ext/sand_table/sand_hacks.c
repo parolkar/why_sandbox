@@ -175,20 +175,26 @@ sandbox_str(kit, ptr)
 }
 
 void
-sandbox_copy_method(klass, def, oklass, visi)
+sandbox_copy_method(klass, def, oklass)
   VALUE klass, oklass;
   ID def;
-  int visi;
 {
   NODE *body;
+  int noex;
      
-  body = rb_method_node(oklass, def);
+  st_lookup(RCLASS(oklass)->m_tbl, def, (st_data_t *)&body);
   if (!body) {
     rb_warn("%s: no method %s found for copying", FREAKYFREAKY, rb_id2name(def));
     return;
   }
   /* FIXME: why won't visi apply here? */
-  rb_add_method(klass, def, NEW_CFUNC(body->nd_cfnc, body->nd_argc), NOEX_PUBLIC);
+  noex = body->nd_noex;
+  body = body->nd_body;
+  if (nd_type(body) == NODE_FBODY)
+  {
+    body = body->nd_head;
+  }
+  rb_add_method(klass, def, NEW_CFUNC(body->nd_cfnc, body->nd_argc), noex);
 }
 
 static int
@@ -198,7 +204,7 @@ sandbox_copy_method_i(name, type, argv)
   VALUE *argv;
 {
   if (type == -1) return ST_CONTINUE;
-  sandbox_copy_method(argv[1], name, argv[0], ((type)&NOEX_MASK));
+  sandbox_copy_method(argv[1], name, argv[0]);
   return ST_CONTINUE;
 }
 

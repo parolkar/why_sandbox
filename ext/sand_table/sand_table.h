@@ -122,10 +122,10 @@ typedef struct SANDKIT {
   NODE *current_node;
 } sandkit;
 
-#define SAND_COPY(K, M) sandbox_copy_method(kit->K, rb_intern(M), rb_##K, NOEX_PUBLIC);
-#define SAND_COPY_ALLOC(K) sandbox_copy_method(CLASS_OF(kit->K), ID_ALLOCATOR, CLASS_OF(rb_##K), NOEX_PUBLIC);
-#define SAND_COPY_S(K, M) sandbox_copy_method(sandbox_singleton_class(kit, kit->K), rb_intern(M), rb_singleton_class(rb_##K), NOEX_PUBLIC);
-#define SAND_COPY_MAIN(M) sandbox_copy_method(sandbox_singleton_class(kit, kit->oMain), rb_intern(M), rb_singleton_class(ruby_top_self), NOEX_PUBLIC);
+#define SAND_COPY(K, M) sandbox_copy_method(kit->K, rb_intern(M), rb_##K);
+#define SAND_COPY_ALLOC(K) sandbox_copy_method(CLASS_OF(kit->K), ID_ALLOCATOR, CLASS_OF(rb_##K));
+#define SAND_COPY_S(K, M) sandbox_copy_method(sandbox_singleton_class(kit, kit->K), rb_intern(M), rb_singleton_class(rb_##K));
+#define SAND_COPY_MAIN(M) sandbox_copy_method(sandbox_singleton_class(kit, kit->oMain), rb_intern(M), rb_singleton_class(ruby_top_self));
 #define SAND_COPY_CONST(K, M) rb_const_set(kit->K, rb_intern(M), rb_const_get(rb_##K, rb_intern(M)));
 #define SAND_COPY_KERNEL(M) SAND_COPY(mKernel, M); SAND_COPY_S(mKernel, M)
 #define SAND_UNDEF(M, K) rb_undef_method(rb_singleton_class(kit->M), K);
@@ -138,7 +138,7 @@ VALUE sandbox_metaclass(sandkit *, VALUE, VALUE);
 VALUE sandbox_singleton_class(sandkit *, VALUE);
 VALUE sandbox_defclass(sandkit *, const char *, VALUE);
 VALUE sandbox_defmodule(sandkit *, const char *);
-void sandbox_copy_method(VALUE, VALUE, ID, int);
+void sandbox_copy_method(VALUE, VALUE, ID);
 void sandbox_foreach_method(VALUE, VALUE, int (*)(ID, long, VALUE *));
 VALUE sandbox_import_class_path(sandkit *, const char *);
 #ifdef FFSAFE
