@@ -5,6 +5,7 @@ class Sandbox::IRB
 
   def initialize(box)
     @box, @sig, @p = box, :IN_IRB
+    @box_errors = %w[StandardError ScriptError].map { |x| @box.eval(x) }
     @prompt = {:start => ">> ", :continue => ".. ", :nested => ".. ",
       :string => "   ", :return => "=> %s\n"}
   end
@@ -40,8 +41,12 @@ class Sandbox::IRB
     scanner.each_top_level_statement do |line, line_no|
       signal_status(:IN_EVAL) do
         line.untaint
-        val = box_eval(line)
-        io.puts @prompt[:return] % [val.inspect]
+        val = box_eval("begin;" + line + ";rescue StandardError, ScriptError => e;e;end")
+        if @box_errors.detect { |x| val.class < x }
+          io.print e.class, ": ", e, "\n"
+        else
+          io.puts @prompt[:return] % [val.inspect]
+        end
       end
     end
   end
