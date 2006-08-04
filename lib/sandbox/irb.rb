@@ -41,11 +41,11 @@ class Sandbox::IRB
     scanner.each_top_level_statement do |line, line_no|
       signal_status(:IN_EVAL) do
         line.untaint
-        val = box_eval("begin;" + line + ";rescue StandardError, ScriptError => e;e;end")
-        if @box_errors.detect { |x| val.class < x }
-          io.print e.class, ": ", e, "\n"
-        else
+        begin
+          val = box_eval(line)
           io.puts @prompt[:return] % [val.inspect]
+        rescue Sandbox::Exception => e
+          io.print e, "\n"
         end
       end
     end

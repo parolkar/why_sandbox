@@ -110,16 +110,8 @@ typedef struct SANDKIT {
   VALUE dln_librefs;
   st_table *loading_tbl;
 
-  int safe_level;
-  unsigned long block_unique;
-  unsigned long frame_unique;
-  struct BLOCK *block;
-  struct FRAME *frame;
-  struct FRAME *top_frame;
   struct SCOPE *scope;
-  struct SCOPE *top_scope;
   struct SANDKIT *banished;
-  NODE *current_node;
 } sandkit;
 
 #define SAND_COPY(K, M) sandbox_copy_method(kit->K, rb_intern(M), rb_##K);

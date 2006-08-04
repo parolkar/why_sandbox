@@ -10,7 +10,7 @@
 
 #define SAND_REV_ID "$Rev$"
 
-static VALUE Qimport, Qinit, Qload;
+static VALUE Qimport, Qinit, Qload, rb_eSandboxException;
 
 static void Init_kit _((sandkit *));
 static void Init_kit_load _((sandkit *));
@@ -78,6 +78,7 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->eLoadError);
   rb_gc_mark_maybe(kit->eLocalJumpError);
   rb_gc_mark_maybe(kit->mErrno);
+  rb_gc_mark((VALUE)kit->scope);
 #ifdef FFSAFE
   if (kit->globals != NULL)
     sandbox_mark_globals(kit->globals);
@@ -177,6 +178,7 @@ sandbox_initialize(argc, argv, self)
 
 typedef struct {
   VALUE *argv;
+  VALUE exception;
   sandkit *kit;
   sandkit *norm;
 } go_cart;
@@ -185,6 +187,8 @@ VALUE
 sandbox_whoa_whoa_whoa(go)
   go_cart *go;
 {
+  VALUE exc = go->exception;
+
   /* okay, move it all back */
   sandkit *norm = go->norm;
   rb_class_tbl = norm->tbl;
@@ -253,6 +257,12 @@ sandbox_whoa_whoa_whoa(go)
   go->kit->banished = NULL;
   free(go->norm);
   free(go);
+
+  if (!NIL_P(exc))
+  {
+    VALUE msg = rb_funcall(exc, rb_intern("message"), 0);
+    rb_raise(rb_eSandboxException, "%s: %s", rb_class2name(rb_obj_class(exc)), RSTRING(msg)->ptr);
+  }
 }
 
 go_cart *
@@ -394,6 +404,7 @@ sandbox_swap_in( self )
 #endif
 
   go = ALLOC(go_cart);
+  go->exception = Qnil;
   go->argv = ALLOC(VALUE);
   go->norm = norm;
   go->kit = kit;
@@ -402,10 +413,26 @@ sandbox_swap_in( self )
 }
 
 VALUE
-sandbox_go_go_go(go)
+sandbox_main_eval(go)
   go_cart *go;
 {
   return rb_mod_module_eval(1, go->argv, go->kit->cObject);
+}
+
+VALUE
+sandbox_reraise(go, exc)
+  go_cart *go;
+  VALUE exc;
+{
+  go->exception = exc;
+  return Qnil;
+}
+
+VALUE
+sandbox_go_go_go(go)
+  go_cart *go;
+{
+  return rb_rescue2(sandbox_main_eval, (VALUE)go, sandbox_reraise, (VALUE)go, rb_cObject, 0);
 }
 
 VALUE
@@ -450,7 +477,7 @@ VALUE
 sandbox_safe_go_go_go(go)
   go_cart *go;
 {
-  return rb_marshal_dump(rb_mod_module_eval(1, go->argv, go->kit->cObject), Qnil);
+  return rb_marshal_dump(sandbox_go_go_go(go), Qnil);
 }
 
 VALUE
@@ -1595,6 +1622,8 @@ void Init_sand_table()
   rb_define_method( cSandboxSafe, "eval", sandbox_safe_eval, 1 );
   rb_define_method( cSandboxSafe, "load", sandbox_safe_load, 1 );
 #endif
+  rb_eSandboxException = rb_define_class_under(cSandbox, "Exception", rb_eException);
+
   Qinit = ID2SYM(rb_intern("init"));
   Qimport = ID2SYM(rb_intern("import"));
   Qload = ID2SYM(rb_intern("load"));
