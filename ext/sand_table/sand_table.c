@@ -10,11 +10,12 @@
 
 #define SAND_REV_ID "$Rev$"
 
-static VALUE Qimport, Qinit, Qload, Qenv, Qreal, Qall, rb_eSandboxException;
+static VALUE Qimport, Qinit, Qload, Qenv, Qio, Qreal, Qall, rb_eSandboxException;
 static ID s_options;
 
 static void Init_kit _((sandkit *));
 static void Init_kit_load _((sandkit *));
+static void Init_kit_io _((sandkit *));
 static void Init_kit_env _((sandkit *));
 static void Init_kit_real _((sandkit *));
 
@@ -35,13 +36,18 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->cBinding);
   rb_gc_mark_maybe(kit->mComparable);
   rb_gc_mark_maybe(kit->cData);
+  rb_gc_mark_maybe(kit->cDir);
   rb_gc_mark_maybe(kit->mEnumerable);
   rb_gc_mark_maybe(kit->eException);
   rb_gc_mark_maybe(kit->cFalseClass);
+  rb_gc_mark_maybe(kit->mFConst);
+  rb_gc_mark_maybe(kit->cFile);
+  rb_gc_mark_maybe(kit->mFileTest);
   rb_gc_mark_maybe(kit->cFixnum);
   rb_gc_mark_maybe(kit->cFloat);
   rb_gc_mark_maybe(kit->cHash);
   rb_gc_mark_maybe(kit->cInteger);
+  rb_gc_mark_maybe(kit->cIO);
   rb_gc_mark_maybe(kit->cMatch);
   rb_gc_mark_maybe(kit->cMethod);
   rb_gc_mark_maybe(kit->cNilClass);
@@ -50,6 +56,7 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->cProc);
   rb_gc_mark_maybe(kit->cRange);
   rb_gc_mark_maybe(kit->cRegexp);
+  rb_gc_mark_maybe(kit->cStat);
   rb_gc_mark_maybe(kit->cString);
   rb_gc_mark_maybe(kit->cStruct);
   rb_gc_mark_maybe(kit->cSymbol);
@@ -152,7 +159,7 @@ sandbox_initialize(argc, argv, self)
   if (!NIL_P(init))
   {
     int i;
-    int init_load = 0, init_env = 0, init_real = 0;
+    int init_load = 0, init_env = 0, init_io = 0, init_real = 0;
     sandkit *kit;
     Check_Type(init, T_ARRAY);
     Data_Get_Struct( self, sandkit, kit );
@@ -163,10 +170,13 @@ sandbox_initialize(argc, argv, self)
         SAND_INIT(load);
       } else if ( mod == Qenv ) {
         SAND_INIT(env);
+      } else if ( mod == Qio ) {
+        SAND_INIT(io);
       } else if ( mod == Qreal ) {
         SAND_INIT(real);
       } else if ( mod == Qall ) {
         SAND_INIT(load);
+        SAND_INIT(io);
         SAND_INIT(env);
         SAND_INIT(real);
       } else {
@@ -197,76 +207,85 @@ typedef struct {
   sandkit *norm;
 } go_cart;
 
+#define SWAP_OUT(N) if (kit->N != 0) { rb_##N = norm->N; }
+#define SWAP_IN(N) if (kit->N != 0) { norm->N = rb_##N; rb_##N = kit->N; }
+
 VALUE
 sandbox_whoa_whoa_whoa(go)
   go_cart *go;
 {
   VALUE exc = go->exception;
+  sandkit *kit = go->kit;
 
   /* okay, move it all back */
   sandkit *norm = go->norm;
   rb_class_tbl = norm->tbl;
-  rb_cObject = norm->cObject;
-  rb_cModule = norm->cModule;
-  rb_cClass = norm->cClass;
-  rb_mKernel = norm->mKernel;
-  rb_cArray = norm->cArray;
-  rb_cBignum = norm->cBignum;
-  rb_cBinding = norm->cBinding;
-  rb_mComparable = norm->mComparable;
-  rb_cData = norm->cData;
-  rb_mEnumerable = norm->mEnumerable;
-  rb_cFalseClass = norm->cFalseClass;
-  rb_cFixnum = norm->cFixnum;
-  rb_cFloat = norm->cFloat;
-  rb_cHash = norm->cHash;
-  rb_cInteger = norm->cInteger;
-  rb_cNilClass = norm->cNilClass;
-  rb_cNumeric = norm->cNumeric;
-  rb_mPrecision = norm->mPrecision;
-  rb_cProc = norm->cProc;
-  rb_cRange = norm->cRange;
-  rb_cRegexp = norm->cRegexp;
-  rb_cString = norm->cString;
-  rb_cStruct = norm->cStruct;
-  rb_cSymbol = norm->cSymbol;
-  rb_cTrueClass = norm->cTrueClass;
-  rb_eException = norm->eException;
-  rb_eStandardError = norm->eStandardError;
-  rb_eSystemExit = norm->eSystemExit;
-  rb_eInterrupt = norm->eInterrupt;
-  rb_eSignal = norm->eSignal;
-  rb_eFatal = norm->eFatal;
-  rb_eArgError = norm->eArgError;
-  rb_eEOFError = norm->eEOFError;
-  rb_eIndexError = norm->eIndexError;
-  rb_eRangeError = norm->eRangeError;
-  rb_eIOError = norm->eIOError;
-  rb_eRuntimeError = norm->eRuntimeError;
-  rb_eSecurityError = norm->eSecurityError;
-  rb_eSystemCallError = norm->eSystemCallError;
-  rb_eTypeError = norm->eTypeError;
-  rb_eZeroDivError = norm->eZeroDivError;
-  rb_eNotImpError = norm->eNotImpError;
-  rb_eNoMemError = norm->eNoMemError;
-  rb_eNoMethodError = norm->eNoMethodError;
-  rb_eFloatDomainError = norm->eFloatDomainError;
-  rb_eScriptError = norm->eScriptError;
-  rb_eNameError = norm->eNameError;
-  rb_eSyntaxError = norm->eSyntaxError;
-  rb_eLoadError = norm->eLoadError;
-  rb_mErrno = norm->mErrno;
+  SWAP_OUT(cObject);
+  SWAP_OUT(cModule);
+  SWAP_OUT(cClass);
+  SWAP_OUT(mKernel);
+  SWAP_OUT(cArray);
+  SWAP_OUT(cBignum);
+  SWAP_OUT(cBinding);
+  SWAP_OUT(mComparable);
+  SWAP_OUT(cData);
+  SWAP_OUT(cDir);
+  SWAP_OUT(mEnumerable);
+  SWAP_OUT(cFalseClass);
+  SWAP_OUT(cFile);
+  SWAP_OUT(mFileTest);
+  SWAP_OUT(cFixnum);
+  SWAP_OUT(cFloat);
+  SWAP_OUT(cHash);
+  SWAP_OUT(cInteger);
+  SWAP_OUT(cIO);
+  SWAP_OUT(cNilClass);
+  SWAP_OUT(cNumeric);
+  SWAP_OUT(mPrecision);
+  SWAP_OUT(cProc);
+  SWAP_OUT(cRange);
+  SWAP_OUT(cRegexp);
+  SWAP_OUT(cStat);
+  SWAP_OUT(cString);
+  SWAP_OUT(cStruct);
+  SWAP_OUT(cSymbol);
+  SWAP_OUT(cTrueClass);
+  SWAP_OUT(eException);
+  SWAP_OUT(eStandardError);
+  SWAP_OUT(eSystemExit);
+  SWAP_OUT(eInterrupt);
+  SWAP_OUT(eSignal);
+  SWAP_OUT(eFatal);
+  SWAP_OUT(eArgError);
+  SWAP_OUT(eEOFError);
+  SWAP_OUT(eIndexError);
+  SWAP_OUT(eRangeError);
+  SWAP_OUT(eIOError);
+  SWAP_OUT(eRuntimeError);
+  SWAP_OUT(eSecurityError);
+  SWAP_OUT(eSystemCallError);
+  SWAP_OUT(eTypeError);
+  SWAP_OUT(eZeroDivError);
+  SWAP_OUT(eNotImpError);
+  SWAP_OUT(eNoMemError);
+  SWAP_OUT(eNoMethodError);
+  SWAP_OUT(eFloatDomainError);
+  SWAP_OUT(eScriptError);
+  SWAP_OUT(eNameError);
+  SWAP_OUT(eSyntaxError);
+  SWAP_OUT(eLoadError);
+  SWAP_OUT(mErrno);
   ruby_top_self = norm->oMain;
   ruby_scope = norm->scope;
 #ifdef FFSAFE
   rb_global_tbl = norm->globals;
-  rb_cMatch = norm->cMatch;
-  rb_cMethod = norm->cMethod;
-  rb_cUnboundMethod = norm->cUnboundMethod;
-  rb_eRegexpError = norm->eRegexpError;
-  rb_cNameErrorMesg = norm->cNameErrorMesg;
-  rb_eSysStackError = norm->eSysStackError;
-  rb_eLocalJumpError = norm->eLocalJumpError;
+  SWAP_OUT(cMatch);
+  SWAP_OUT(cMethod);
+  SWAP_OUT(cUnboundMethod);
+  SWAP_OUT(eRegexpError);
+  SWAP_OUT(cNameErrorMesg);
+  SWAP_OUT(eSysStackError);
+  SWAP_OUT(eLocalJumpError);
 #endif
   go->kit->active = 0;
 
@@ -293,133 +312,78 @@ sandbox_swap_in( self )
   norm = ALLOC(sandkit);
   MEMZERO(norm, sandkit, 1);
   norm->tbl = rb_class_tbl;
-  norm->cObject = rb_cObject;
-  norm->cModule = rb_cModule;
-  norm->cClass = rb_cClass;
-  norm->mKernel = rb_mKernel;
-  norm->cArray = rb_cArray;
-  norm->cBignum = rb_cBignum;
-  norm->cBinding = rb_cBinding;
-  norm->mComparable = rb_mComparable;
-  norm->cData = rb_cData;
-  norm->mEnumerable = rb_mEnumerable;
-  norm->cFalseClass = rb_cFalseClass;
-  norm->cFixnum = rb_cFixnum;
-  norm->cFloat = rb_cFloat;
-  norm->cHash = rb_cHash;
-  norm->cInteger = rb_cInteger;
-  norm->cNilClass = rb_cNilClass;
-  norm->cNumeric = rb_cNumeric;
-  norm->mPrecision = rb_mPrecision;
-  norm->cProc = rb_cProc;
-  norm->cRange = rb_cRange;
-  norm->cRegexp = rb_cRegexp;
-  norm->cString = rb_cString;
-  norm->cStruct = rb_cStruct;
-  norm->cSymbol = rb_cSymbol;
-  norm->cTrueClass = rb_cTrueClass;
-  norm->eException = rb_eException;
-  norm->eStandardError = rb_eStandardError;
-  norm->eSystemExit = rb_eSystemExit;
-  norm->eInterrupt = rb_eInterrupt;
-  norm->eSignal = rb_eSignal;
-  norm->eFatal = rb_eFatal;
-  norm->eArgError = rb_eArgError;
-  norm->eEOFError = rb_eEOFError;
-  norm->eIndexError = rb_eIndexError;
-  norm->eRangeError = rb_eRangeError;
-  norm->eIOError = rb_eIOError;
-  norm->eRuntimeError = rb_eRuntimeError;
-  norm->eSecurityError = rb_eSecurityError;
-  norm->eSystemCallError = rb_eSystemCallError;
-  norm->eTypeError = rb_eTypeError;
-  norm->eZeroDivError = rb_eZeroDivError;
-  norm->eNotImpError = rb_eNotImpError;
-  norm->eNoMemError = rb_eNoMemError;
-  norm->eNoMethodError = rb_eNoMethodError;
-  norm->eFloatDomainError = rb_eFloatDomainError;
-  norm->eScriptError = rb_eScriptError;
-  norm->eNameError = rb_eNameError;
-  norm->eSyntaxError = rb_eSyntaxError;
-  norm->eLoadError = rb_eLoadError;
-  norm->mErrno = rb_mErrno;
-  norm->oMain = ruby_top_self;
-  norm->scope = ruby_scope;
-#ifdef FFSAFE
-  norm->globals = rb_global_tbl;
-  norm->cMatch = rb_cMatch;
-  norm->cMethod = rb_cMethod;
-  norm->cUnboundMethod = rb_cUnboundMethod;
-  norm->eRegexpError = rb_eRegexpError;
-  norm->cNameErrorMesg = rb_cNameErrorMesg;
-  norm->eSysStackError = rb_eSysStackError;
-  norm->eLocalJumpError = rb_eLocalJumpError;
-#endif
-
-  /* replace everything */
   rb_class_tbl = kit->tbl;
-  rb_cObject = kit->cObject;
-  rb_cModule = kit->cModule;
-  rb_cClass = kit->cClass;
-  rb_mKernel = kit->mKernel;
-  rb_cArray = kit->cArray;
-  rb_cBignum = kit->cBignum;
-  rb_cBinding = kit->cBinding;
-  rb_mComparable = kit->mComparable;
-  rb_cData = kit->cData;
-  rb_mEnumerable = kit->mEnumerable;
-  rb_cFalseClass = kit->cFalseClass;
-  rb_cFixnum = kit->cFixnum;
-  rb_cFloat = kit->cFloat;
-  rb_cHash = kit->cHash;
-  rb_cInteger = kit->cInteger;
-  rb_cNilClass = kit->cNilClass;
-  rb_cNumeric = kit->cNumeric;
-  rb_mPrecision = kit->mPrecision;
-  rb_cProc = kit->cProc;
-  rb_cRange = kit->cRange;
-  rb_cRegexp = kit->cRegexp;
-  rb_cString = kit->cString;
-  rb_cStruct = kit->cStruct;
-  rb_cSymbol = kit->cSymbol;
-  rb_cTrueClass = kit->cTrueClass;
-  rb_eException = kit->eException;
-  rb_eStandardError = kit->eStandardError;
-  rb_eSystemExit = kit->eSystemExit;
-  rb_eInterrupt = kit->eInterrupt;
-  rb_eSignal = kit->eSignal;
-  rb_eFatal = kit->eFatal;
-  rb_eArgError = kit->eArgError;
-  rb_eEOFError = kit->eEOFError;
-  rb_eIndexError = kit->eIndexError;
-  rb_eRangeError = kit->eRangeError;
-  rb_eIOError = kit->eIOError;
-  rb_eRuntimeError = kit->eRuntimeError;
-  rb_eSecurityError = kit->eSecurityError;
-  rb_eSystemCallError = kit->eSystemCallError;
-  rb_eTypeError = kit->eTypeError;
-  rb_eZeroDivError = kit->eZeroDivError;
-  rb_eNotImpError = kit->eNotImpError;
-  rb_eNoMemError = kit->eNoMemError;
-  rb_eNoMethodError = kit->eNoMethodError;
-  rb_eFloatDomainError = kit->eFloatDomainError;
-  rb_eScriptError = kit->eScriptError;
-  rb_eNameError = kit->eNameError;
-  rb_eSyntaxError = kit->eSyntaxError;
-  rb_eLoadError = kit->eLoadError;
-  rb_mErrno = kit->mErrno;
+  SWAP_IN(cObject);
+  SWAP_IN(cModule);
+  SWAP_IN(cClass);
+  SWAP_IN(mKernel);
+  SWAP_IN(cArray);
+  SWAP_IN(cBignum);
+  SWAP_IN(cBinding);
+  SWAP_IN(mComparable);
+  SWAP_IN(cData);
+  SWAP_IN(cDir);
+  SWAP_IN(mEnumerable);
+  SWAP_IN(cFalseClass);
+  SWAP_IN(cFile);
+  SWAP_IN(mFileTest);
+  SWAP_IN(cFixnum);
+  SWAP_IN(cFloat);
+  SWAP_IN(cHash);
+  SWAP_IN(cInteger);
+  SWAP_IN(cIO);
+  SWAP_IN(cNilClass);
+  SWAP_IN(cNumeric);
+  SWAP_IN(mPrecision);
+  SWAP_IN(cProc);
+  SWAP_IN(cRange);
+  SWAP_IN(cRegexp);
+  SWAP_IN(cStat);
+  SWAP_IN(cString);
+  SWAP_IN(cStruct);
+  SWAP_IN(cSymbol);
+  SWAP_IN(cTrueClass);
+  SWAP_IN(eException);
+  SWAP_IN(eStandardError);
+  SWAP_IN(eSystemExit);
+  SWAP_IN(eInterrupt);
+  SWAP_IN(eSignal);
+  SWAP_IN(eFatal);
+  SWAP_IN(eArgError);
+  SWAP_IN(eEOFError);
+  SWAP_IN(eIndexError);
+  SWAP_IN(eRangeError);
+  SWAP_IN(eIOError);
+  SWAP_IN(eRuntimeError);
+  SWAP_IN(eSecurityError);
+  SWAP_IN(eSystemCallError);
+  SWAP_IN(eTypeError);
+  SWAP_IN(eZeroDivError);
+  SWAP_IN(eNotImpError);
+  SWAP_IN(eNoMemError);
+  SWAP_IN(eNoMethodError);
+  SWAP_IN(eFloatDomainError);
+  SWAP_IN(eScriptError);
+  SWAP_IN(eNameError);
+  SWAP_IN(eSyntaxError);
+  SWAP_IN(eLoadError);
+  SWAP_IN(mErrno);
+  norm->oMain = ruby_top_self;
   ruby_top_self = kit->oMain;
+  norm->scope = ruby_scope;
   ruby_scope = kit->scope;
 #ifdef FFSAFE
+  norm->globals = rb_global_tbl;
   rb_global_tbl = kit->globals;
-  rb_cMatch = kit->cMatch;
-  rb_cMethod = kit->cMethod;
-  rb_cUnboundMethod = kit->cUnboundMethod;
-  rb_eRegexpError = kit->eRegexpError;
-  rb_cNameErrorMesg = kit->cNameErrorMesg;
-  rb_eSysStackError = kit->eSysStackError;
-  rb_eLocalJumpError = kit->eLocalJumpError;
+  SWAP_IN(cMatch);
+  SWAP_IN(cMethod);
+  SWAP_IN(cUnboundMethod);
+  SWAP_IN(eRegexpError);
+  SWAP_IN(cNameErrorMesg);
+  SWAP_IN(eSysStackError);
+  SWAP_IN(eLocalJumpError);
 #endif
+
   kit->active = 1;
 
   go = ALLOC(go_cart);
@@ -1730,9 +1694,403 @@ Init_kit_load(kit)
 }
 
 static void
+Init_kit_io(kit)
+  sandkit *kit;
+{
+  kit->eIOError = sandbox_defclass(kit, "IOError", kit->eStandardError);
+  kit->eEOFError = sandbox_defclass(kit, "EOFError", kit->eIOError);
+
+  kit->cIO = sandbox_defclass(kit, "IO", kit->cObject);
+  rb_include_module(kit->cIO, kit->mEnumerable);
+
+  SAND_COPY_ALLOC(cIO);
+  SAND_COPY_S(cIO, "new");
+  SAND_COPY_S(cIO, "open");
+  SAND_COPY_S(cIO, "sysopen");
+  SAND_COPY_S(cIO, "for_fd");
+  SAND_COPY_S(cIO, "popen");
+  SAND_COPY_S(cIO, "foreach");
+  SAND_COPY_S(cIO, "readlines");
+  SAND_COPY_S(cIO, "read");
+  SAND_COPY_S(cIO, "select");
+  SAND_COPY_S(cIO, "pipe");
+
+  SAND_COPY(cIO, "initialize");
+
+  /*
+  rb_output_fs = Qnil;
+  rb_define_hooked_variable("$,", &rb_output_fs, 0, rb_str_setter);
+
+  rb_define_hooked_variable("$/", &rb_rs, 0, rb_str_setter);
+  rb_define_hooked_variable("$-0", &rb_rs, 0, rb_str_setter);
+  rb_define_hooked_variable("$\\", &rb_output_rs, 0, rb_str_setter);
+
+  rb_define_hooked_variable("$.", &lineno, 0, lineno_setter);
+  rb_define_virtual_variable("$_", rb_lastline_get, rb_lastline_set);
+  */
+
+  SAND_COPY(cIO, "initialize_copy");
+  SAND_COPY(cIO, "reopen");
+
+  SAND_COPY(cIO, "print");
+  SAND_COPY(cIO, "putc");
+  SAND_COPY(cIO, "puts");
+  SAND_COPY(cIO, "printf");
+
+  SAND_COPY(cIO, "each");
+  SAND_COPY(cIO, "each_line");
+  SAND_COPY(cIO, "each_byte");
+
+  SAND_COPY(cIO, "syswrite");
+  SAND_COPY(cIO, "sysread");
+
+  SAND_COPY(cIO, "fileno");
+  rb_define_alias(kit->cIO, "to_i", "fileno");
+  SAND_COPY(cIO, "to_io");
+
+  SAND_COPY(cIO, "fsync");
+  SAND_COPY(cIO, "sync");
+  SAND_COPY(cIO, "sync=");
+
+  SAND_COPY(cIO, "lineno");
+  SAND_COPY(cIO, "lineno=");
+
+  SAND_COPY(cIO, "readlines");
+
+  SAND_COPY(cIO, "read_nonblock");
+  SAND_COPY(cIO, "write_nonblock");
+  SAND_COPY(cIO, "readpartial");
+  SAND_COPY(cIO, "read");
+  SAND_COPY(cIO, "write");
+  SAND_COPY(cIO, "gets");
+  SAND_COPY(cIO, "readline");
+  SAND_COPY(cIO, "getc");
+  SAND_COPY(cIO, "readchar");
+  SAND_COPY(cIO, "ungetc");
+  SAND_COPY(cIO, "<<");
+  SAND_COPY(cIO, "flush");
+  SAND_COPY(cIO, "tell");
+  SAND_COPY(cIO, "seek");
+  SAND_COPY_CONST(cIO, "SEEK_SET");
+  SAND_COPY_CONST(cIO, "SEEK_CUR");
+  SAND_COPY_CONST(cIO, "SEEK_END");
+  SAND_COPY(cIO, "rewind");
+  SAND_COPY(cIO, "pos");
+  SAND_COPY(cIO, "pos=");
+  SAND_COPY(cIO, "eof");
+  SAND_COPY(cIO, "eof?");
+
+  SAND_COPY(cIO, "close");
+  SAND_COPY(cIO, "closed?");
+  SAND_COPY(cIO, "close_read");
+  SAND_COPY(cIO, "close_write");
+
+  SAND_COPY(cIO, "isatty");
+  SAND_COPY(cIO, "tty?");
+  SAND_COPY(cIO, "binmode");
+  SAND_COPY(cIO, "sysseek");
+
+  SAND_COPY(cIO, "ioctl");
+  SAND_COPY(cIO, "fcntl");
+  SAND_COPY(cIO, "pid");
+  SAND_COPY(cIO, "inspect");
+
+  kit->mFileTest = sandbox_defmodule(kit, "FileTest");
+  kit->cFile = sandbox_defclass(kit, "File", kit->cIO);
+
+#define SAND_COPY_FILETEST(M) SAND_COPY_S(mFileTest, M); SAND_COPY_S(cFile, M);
+
+  SAND_COPY_FILETEST("directory?");
+  SAND_COPY_FILETEST("exist?");
+  SAND_COPY_FILETEST("exists?"); /* temporary */
+  SAND_COPY_FILETEST("readable?");
+  SAND_COPY_FILETEST("readable_real?");
+  SAND_COPY_FILETEST("writable?");
+  SAND_COPY_FILETEST("writable_real?");
+  SAND_COPY_FILETEST("executable?");
+  SAND_COPY_FILETEST("executable_real?");
+  SAND_COPY_FILETEST("file?");
+  SAND_COPY_FILETEST("zero?");
+  SAND_COPY_FILETEST("size?");
+  SAND_COPY_FILETEST("size");
+  SAND_COPY_FILETEST("owned?");
+  SAND_COPY_FILETEST("grpowned?");
+
+  SAND_COPY_FILETEST("pipe?");
+  SAND_COPY_FILETEST("symlink?");
+  SAND_COPY_FILETEST("socket?");
+
+  SAND_COPY_FILETEST("blockdev?");
+  SAND_COPY_FILETEST("chardev?");
+
+  SAND_COPY_FILETEST("setuid?");
+  SAND_COPY_FILETEST("setgid?");
+  SAND_COPY_FILETEST("sticky?");
+
+  SAND_COPY_FILETEST("identical?");
+
+  SAND_COPY_S(cFile, "stat");
+  SAND_COPY_S(cFile, "lstat");
+  SAND_COPY_S(cFile, "ftype");
+
+  SAND_COPY_S(cFile, "atime");
+  SAND_COPY_S(cFile, "mtime");
+  SAND_COPY_S(cFile, "ctime");
+
+  SAND_COPY_S(cFile, "utime");
+  SAND_COPY_S(cFile, "chmod");
+  SAND_COPY_S(cFile, "chown");
+  SAND_COPY_S(cFile, "lchmod");
+  SAND_COPY_S(cFile, "lchown");
+
+  SAND_COPY_S(cFile, "link");
+  SAND_COPY_S(cFile, "symlink");
+  SAND_COPY_S(cFile, "readlink");
+
+  SAND_COPY_S(cFile, "unlink");
+  SAND_COPY_S(cFile, "delete");
+  SAND_COPY_S(cFile, "rename");
+  SAND_COPY_S(cFile, "umask");
+  SAND_COPY_S(cFile, "truncate");
+  SAND_COPY_S(cFile, "expand_path");
+  SAND_COPY_S(cFile, "basename");
+  SAND_COPY_S(cFile, "dirname");
+  SAND_COPY_S(cFile, "extname");
+
+  SAND_COPY_S(cFile, "split");
+  SAND_COPY_S(cFile, "join");
+
+  /* FIXME: these strings all need to be dup'd into the sandbox.
+  SAND_DUP_CONST(cFile, "Separator");
+  SAND_DUP_CONST(cFile, "SEPARATOR");
+  SAND_DUP_CONST(cFile, "ALT_SEPARATOR");
+  SAND_DUP_CONST(cFile, "PATH_SEPARATOR");
+  */
+
+  SAND_COPY(cIO, "stat"); /* this is IO's method */
+  SAND_COPY(cFile, "lstat");
+
+  SAND_COPY(cFile, "atime");
+  SAND_COPY(cFile, "mtime");
+  SAND_COPY(cFile, "ctime");
+
+  SAND_COPY(cFile, "chmod");
+  SAND_COPY(cFile, "chown");
+  SAND_COPY(cFile, "truncate");
+
+  SAND_COPY(cFile, "flock");
+
+  VALUE rb_mFConst = rb_const_get_at(rb_cFile, rb_intern("Constants"));
+  kit->mFConst = rb_define_module_under(kit->cFile, "Constants");
+  rb_include_module(kit->cIO, kit->mFConst);
+  SAND_COPY_CONST(mFConst, "LOCK_SH");
+  SAND_COPY_CONST(mFConst, "LOCK_EX");
+  SAND_COPY_CONST(mFConst, "LOCK_UN");
+  SAND_COPY_CONST(mFConst, "LOCK_NB");
+
+  SAND_COPY(cFile, "path");
+  SAND_COPY_KERNEL("test");
+
+  kit->cStat = rb_define_class_under(kit->cFile, "Stat", kit->cObject);
+  SAND_COPY_ALLOC(cStat);
+  SAND_COPY(cStat, "initialize");
+  SAND_COPY(cStat, "initialize_copy");
+
+  rb_include_module(kit->cStat, kit->mComparable);
+
+  SAND_COPY(cStat, "<=>");
+
+  SAND_COPY(cStat, "dev");
+  SAND_COPY(cStat, "dev_major");
+  SAND_COPY(cStat, "dev_minor");
+  SAND_COPY(cStat, "ino");
+  SAND_COPY(cStat, "mode");
+  SAND_COPY(cStat, "nlink");
+  SAND_COPY(cStat, "uid");
+  SAND_COPY(cStat, "gid");
+  SAND_COPY(cStat, "rdev");
+  SAND_COPY(cStat, "rdev_major");
+  SAND_COPY(cStat, "rdev_minor");
+  SAND_COPY(cStat, "size");
+  SAND_COPY(cStat, "blksize");
+  SAND_COPY(cStat, "blocks");
+  SAND_COPY(cStat, "atime");
+  SAND_COPY(cStat, "mtime");
+  SAND_COPY(cStat, "ctime");
+
+  SAND_COPY(cStat, "inspect");
+
+  SAND_COPY(cStat, "ftype");
+
+  SAND_COPY(cStat, "directory?");
+  SAND_COPY(cStat, "readable?");
+  SAND_COPY(cStat, "readable_real?");
+  SAND_COPY(cStat, "writable?");
+  SAND_COPY(cStat, "writable_real?");
+  SAND_COPY(cStat, "executable?");
+  SAND_COPY(cStat, "executable_real?");
+  SAND_COPY(cStat, "file?");
+  SAND_COPY(cStat, "zero?");
+  SAND_COPY(cStat, "size?");
+  SAND_COPY(cStat, "owned?");
+  SAND_COPY(cStat, "grpowned?");
+
+  SAND_COPY(cStat, "pipe?");
+  SAND_COPY(cStat, "symlink?");
+  SAND_COPY(cStat, "socket?");
+
+  SAND_COPY(cStat, "blockdev?");
+  SAND_COPY(cStat, "chardev?");
+
+  SAND_COPY(cStat, "setuid?");
+  SAND_COPY(cStat, "setgid?");
+  SAND_COPY(cStat, "sticky?");
+
+  SAND_COPY(cFile, "initialize");
+
+  SAND_COPY_CONST(mFConst, "RDONLY");
+  SAND_COPY_CONST(mFConst, "WRONLY");
+  SAND_COPY_CONST(mFConst, "RDWR");
+  SAND_COPY_CONST(mFConst, "APPEND");
+  SAND_COPY_CONST(mFConst, "CREAT");
+  SAND_COPY_CONST(mFConst, "EXCL");
+  SAND_COPY_IF_CONST(mFConst, "NONBLOCK");
+  SAND_COPY_CONST(mFConst, "TRUNC");
+  SAND_COPY_IF_CONST(mFConst, "NOCTTY");
+  SAND_COPY_IF_CONST(mFConst, "BINARY");
+  SAND_COPY_IF_CONST(mFConst, "SYNC");
+
+  kit->cDir = sandbox_defclass(kit, "Dir", kit->cObject);
+
+  rb_include_module(kit->cDir, kit->mEnumerable);
+
+  SAND_COPY_ALLOC(cDir);
+  SAND_COPY_S(cDir, "open");
+  SAND_COPY_S(cDir, "foreach");
+  SAND_COPY_S(cDir, "entries");
+
+  SAND_COPY(cDir, "initialize");
+  SAND_COPY(cDir, "path");
+  SAND_COPY(cDir, "read");
+  SAND_COPY(cDir, "each");
+  SAND_COPY(cDir, "rewind");
+  SAND_COPY(cDir, "tell");
+  SAND_COPY(cDir, "seek");
+  SAND_COPY(cDir, "pos");
+  SAND_COPY(cDir, "pos=");
+  SAND_COPY(cDir, "close");
+
+  SAND_COPY_S(cDir, "chdir");
+  SAND_COPY_S(cDir, "getwd");
+  SAND_COPY_S(cDir, "pwd");
+  SAND_COPY_S(cDir, "chroot");
+  SAND_COPY_S(cDir, "mkdir");
+  SAND_COPY_S(cDir, "rmdir");
+  SAND_COPY_S(cDir, "delete");
+  SAND_COPY_S(cDir, "unlink");
+
+  SAND_COPY_S(cDir, "glob");
+  SAND_COPY_S(cDir, "[]");
+
+  SAND_COPY_S(cFile, "fnmatch");
+  SAND_COPY_S(cFile, "fnmatch?");
+
+  SAND_COPY_CONST(mFConst, "FNM_NOESCAPE");
+  SAND_COPY_CONST(mFConst, "FNM_PATHNAME");
+  SAND_COPY_CONST(mFConst, "FNM_DOTMATCH");
+  SAND_COPY_CONST(mFConst, "FNM_CASEFOLD");
+  SAND_COPY_CONST(mFConst, "FNM_SYSCASE");
+}
+
+static void
 Init_kit_env(kit)
   sandkit *kit;
 {
+  SAND_COPY_KERNEL("syscall");
+  SAND_COPY_KERNEL("open");
+  SAND_COPY_KERNEL("printf");
+  SAND_COPY_KERNEL("print");
+  SAND_COPY_KERNEL("putc");
+  SAND_COPY_KERNEL("puts");
+  SAND_COPY_KERNEL("gets");
+  SAND_COPY_KERNEL("readline");
+  SAND_COPY_KERNEL("getc");
+  SAND_COPY_KERNEL("select");
+  SAND_COPY_KERNEL("readlines");
+  SAND_COPY_KERNEL("`");
+  SAND_COPY_KERNEL("p");
+  SAND_COPY(mKernel, "display");
+
+  /*
+  rb_define_variable("$stdin", &rb_stdin);
+  rb_stdin = prep_stdio(stdin, FMODE_READABLE, rb_cIO);
+  rb_define_hooked_variable("$stdout", &rb_stdout, 0, stdout_setter);
+  rb_stdout = prep_stdio(stdout, FMODE_WRITABLE, rb_cIO);
+  rb_define_hooked_variable("$stderr", &rb_stderr, 0, stdout_setter);
+  rb_stderr = prep_stdio(stderr, FMODE_WRITABLE, rb_cIO);
+  rb_define_hooked_variable("$>", &rb_stdout, 0, stdout_setter);
+  orig_stdout = rb_stdout;
+  rb_deferr = orig_stderr = rb_stderr;
+  */
+
+  /* variables to be removed in 1.8.1 */
+  /*
+  rb_define_hooked_variable("$defout", &rb_stdout, 0, defout_setter);
+  rb_define_hooked_variable("$deferr", &rb_stderr, 0, deferr_setter);
+  */
+
+  /* constants to hold original stdin/stdout/stderr */
+  SAND_COPY_CONST(cObject, "STDIN");
+  SAND_COPY_CONST(cObject, "STDOUT");
+  SAND_COPY_CONST(cObject, "STDERR");
+
+  /*
+  rb_define_readonly_variable("$<", &argf);
+  VALUE argf = rb_obj_alloc(kit->cObject);
+  rb_extend_object(argf, kit->mEnumerable);
+  rb_define_global_const("ARGF", argf);
+  rb_define_const(kit->cObject, "ARGV", argf);
+
+  rb_define_singleton_method(argf, "to_s", argf_to_s, 0);
+  rb_define_singleton_method(argf, "fileno", argf_fileno, 0);
+  rb_define_singleton_method(argf, "to_i", argf_fileno, 0);
+  rb_define_singleton_method(argf, "to_io", argf_to_io, 0);
+  rb_define_singleton_method(argf, "each",  argf_each_line, -1);
+  rb_define_singleton_method(argf, "each_line",  argf_each_line, -1);
+  rb_define_singleton_method(argf, "each_byte",  argf_each_byte, 0);
+
+  rb_define_singleton_method(argf, "read",  argf_read, -1);
+  rb_define_singleton_method(argf, "readlines", rb_f_readlines, -1);
+  rb_define_singleton_method(argf, "to_a", rb_f_readlines, -1);
+  rb_define_singleton_method(argf, "gets", rb_f_gets, -1);
+  rb_define_singleton_method(argf, "readline", rb_f_readline, -1);
+  rb_define_singleton_method(argf, "getc", argf_getc, 0);
+  rb_define_singleton_method(argf, "readchar", argf_readchar, 0);
+  rb_define_singleton_method(argf, "tell", argf_tell, 0);
+  rb_define_singleton_method(argf, "seek", argf_seek_m, -1);
+  rb_define_singleton_method(argf, "rewind", argf_rewind, 0);
+  rb_define_singleton_method(argf, "pos", argf_tell, 0);
+  rb_define_singleton_method(argf, "pos=", argf_set_pos, 1);
+  rb_define_singleton_method(argf, "eof", argf_eof, 0);
+  rb_define_singleton_method(argf, "eof?", argf_eof, 0);
+  rb_define_singleton_method(argf, "binmode", argf_binmode, 0);
+
+  rb_define_singleton_method(argf, "filename", argf_filename, 0);
+  rb_define_singleton_method(argf, "path", argf_filename, 0);
+  rb_define_singleton_method(argf, "file", argf_file, 0);
+  rb_define_singleton_method(argf, "skip", argf_skip, 0);
+  rb_define_singleton_method(argf, "close", argf_close_m, 0);
+  rb_define_singleton_method(argf, "closed?", argf_closed, 0);
+
+  rb_define_singleton_method(argf, "lineno",   argf_lineno, 0);
+  rb_define_singleton_method(argf, "lineno=",  argf_set_lineno, 1);
+
+  rb_global_variable(&current_file);
+  rb_define_readonly_variable("$FILENAME", &filename);
+  filename = rb_str_new2("-");
+
+  rb_define_virtual_variable("$-i", opt_i_get, opt_i_set);
+  */
 }
 
 static void
@@ -1777,5 +2135,6 @@ void Init_sand_table()
   Qload = ID2SYM(rb_intern("load"));
   Qenv = ID2SYM(rb_intern("env"));
   Qreal = ID2SYM(rb_intern("real"));
+  Qio = ID2SYM(rb_intern("io"));
   Qall = ID2SYM(rb_intern("all"));
 }

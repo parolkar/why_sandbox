@@ -55,13 +55,18 @@ typedef struct SANDKIT {
   VALUE cBinding;
   VALUE mComparable;
   VALUE cData;
+  VALUE cDir;
   VALUE mEnumerable;
   VALUE eException;
   VALUE cFalseClass;
+  VALUE mFConst;
+  VALUE cFile;
+  VALUE mFileTest;
   VALUE cFixnum;
   VALUE cFloat;
   VALUE cHash;
   VALUE cInteger;
+  VALUE cIO;
   VALUE cMatch;
   VALUE cMethod;
   VALUE cNilClass;
@@ -70,6 +75,7 @@ typedef struct SANDKIT {
   VALUE cProc;
   VALUE cRange;
   VALUE cRegexp;
+  VALUE cStat;
   VALUE cString;
   VALUE cStruct;
   VALUE cSymbol;
