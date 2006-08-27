@@ -52,6 +52,7 @@ typedef struct SANDKIT {
   VALUE oMain;
   VALUE cArray;
   VALUE cBignum;
+  VALUE cBinding;
   VALUE mComparable;
   VALUE cData;
   VALUE mEnumerable;
@@ -120,8 +121,14 @@ typedef struct SANDKIT {
 #define SAND_COPY_S(K, M) sandbox_copy_method(sandbox_singleton_class(kit, kit->K), rb_intern(M), rb_singleton_class(rb_##K));
 #define SAND_COPY_MAIN(M) sandbox_copy_method(sandbox_singleton_class(kit, kit->oMain), rb_intern(M), rb_singleton_class(ruby_top_self));
 #define SAND_COPY_CONST(K, M) rb_const_set(kit->K, rb_intern(M), rb_const_get(rb_##K, rb_intern(M)));
+#define SAND_COPY_IF_CONST(K, M) if (rb_const_defined(rb_##K, rb_intern(M))) { SAND_COPY_CONST(K, M) }
 #define SAND_COPY_KERNEL(M) SAND_COPY(mKernel, M); SAND_COPY_S(mKernel, M)
 #define SAND_UNDEF(M, K) rb_undef_method(rb_singleton_class(kit->M), K);
+#define SAND_SYSERR(K, M) \
+  if (rb_const_defined(rb_##K, rb_intern(M))) { \
+    VALUE error = rb_define_class_under(kit->mErrno, M, kit->eSystemCallError); \
+    rb_define_const(error, "Errno", rb_const_get(rb_const_get(rb_##K, rb_intern(M)), rb_intern("Errno"))); \
+  }
 
 VALUE sandbox_module_new(sandkit *);
 VALUE sandbox_dummy();

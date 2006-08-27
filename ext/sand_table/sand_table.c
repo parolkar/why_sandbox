@@ -10,11 +10,13 @@
 
 #define SAND_REV_ID "$Rev$"
 
-static VALUE Qimport, Qinit, Qload, rb_eSandboxException;
+static VALUE Qimport, Qinit, Qload, Qenv, Qreal, Qall, rb_eSandboxException;
 static ID s_options;
 
 static void Init_kit _((sandkit *));
 static void Init_kit_load _((sandkit *));
+static void Init_kit_env _((sandkit *));
+static void Init_kit_real _((sandkit *));
 
 static void
 mark_sandbox(kit)
@@ -30,6 +32,7 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->oMain);
   rb_gc_mark_maybe(kit->cArray);
   rb_gc_mark_maybe(kit->cBignum);
+  rb_gc_mark_maybe(kit->cBinding);
   rb_gc_mark_maybe(kit->mComparable);
   rb_gc_mark_maybe(kit->cData);
   rb_gc_mark_maybe(kit->mEnumerable);
@@ -127,6 +130,8 @@ sandbox_alloc(class)
   return Data_Wrap_Struct( class, mark_sandbox, free_sandbox, kit );
 }
 
+#define SAND_INIT(N) if ( init_##N == 0 ) { Init_kit_##N(kit); init_##N = 1; }
+
 static VALUE
 sandbox_initialize(argc, argv, self)
   int argc;
@@ -147,18 +152,24 @@ sandbox_initialize(argc, argv, self)
   if (!NIL_P(init))
   {
     int i;
+    int init_load = 0, init_env = 0, init_real = 0;
     sandkit *kit;
     Check_Type(init, T_ARRAY);
     Data_Get_Struct( self, sandkit, kit );
     for ( i = 0; i < RARRAY(init)->len; i++ )
     {
       VALUE mod = rb_ary_entry(init, i);
-      if ( mod == Qload )
-      {
-        Init_kit_load(kit);
-      }
-      else
-      {
+      if ( mod == Qload ) {
+        SAND_INIT(load);
+      } else if ( mod == Qenv ) {
+        SAND_INIT(env);
+      } else if ( mod == Qreal ) {
+        SAND_INIT(real);
+      } else if ( mod == Qall ) {
+        SAND_INIT(load);
+        SAND_INIT(env);
+        SAND_INIT(real);
+      } else {
         rb_raise(rb_eArgError, "no %s module for the sandbox", mod);
       }
     }
@@ -201,6 +212,7 @@ sandbox_whoa_whoa_whoa(go)
   rb_mKernel = norm->mKernel;
   rb_cArray = norm->cArray;
   rb_cBignum = norm->cBignum;
+  rb_cBinding = norm->cBinding;
   rb_mComparable = norm->mComparable;
   rb_cData = norm->cData;
   rb_mEnumerable = norm->mEnumerable;
@@ -287,6 +299,7 @@ sandbox_swap_in( self )
   norm->mKernel = rb_mKernel;
   norm->cArray = rb_cArray;
   norm->cBignum = rb_cBignum;
+  norm->cBinding = rb_cBinding;
   norm->mComparable = rb_mComparable;
   norm->cData = rb_cData;
   norm->mEnumerable = rb_mEnumerable;
@@ -351,6 +364,7 @@ sandbox_swap_in( self )
   rb_mKernel = kit->mKernel;
   rb_cArray = kit->cArray;
   rb_cBignum = kit->cBignum;
+  rb_cBinding = kit->cBinding;
   rb_mComparable = kit->mComparable;
   rb_cData = kit->cData;
   rb_mEnumerable = kit->mEnumerable;
@@ -768,15 +782,6 @@ Init_kit(kit)
   SAND_COPY_KERNEL("raise");
   SAND_COPY_KERNEL("fail");
 
-  /* FIXME: reimplement and test_exploits.rb(test_caller) */
-  /* SAND_COPY_KERNEL("caller"); */
-
-  SAND_COPY_KERNEL("exit");
-  SAND_COPY_KERNEL("abort");
-
-  /* FIXME: reimplement */
-  /* SAND_COPY_KERNEL("at_exit"); */
-
   SAND_COPY_KERNEL("catch");
   SAND_COPY_KERNEL("throw");
   SAND_COPY_KERNEL("global_variables");
@@ -817,16 +822,6 @@ Init_kit(kit)
   SAND_COPY_MAIN("private");
 
   SAND_COPY(mKernel, "extend");
-
-  /*
-  rb_define_global_function("trace_var", rb_f_trace_var, -1);
-  rb_define_global_function("untrace_var", rb_f_untrace_var, -1);
-
-  rb_define_global_function("set_trace_func", set_trace_func, 1);
-  rb_global_variable(&trace_func);
-
-  rb_define_virtual_variable("$SAFE", safe_getter, safe_setter);
-  */
 
   kit->cString  = sandbox_defclass(kit, "String", kit->cObject);
   rb_include_module(kit->cString, kit->mComparable);
@@ -1015,9 +1010,128 @@ Init_kit(kit)
   SAND_COPY_S(eSystemCallError, "===");
 
   kit->mErrno = sandbox_defmodule(kit, "Errno");
-  /*
-  rb_define_global_function("warn", rb_warn_m, 1);
-  */
+  SAND_SYSERR(mErrno, "EPERM");
+  SAND_SYSERR(mErrno, "ENOENT");
+  SAND_SYSERR(mErrno, "ESRCH");
+  SAND_SYSERR(mErrno, "EINTR");
+  SAND_SYSERR(mErrno, "EIO");
+  SAND_SYSERR(mErrno, "ENXIO");
+  SAND_SYSERR(mErrno, "E2BIG");
+  SAND_SYSERR(mErrno, "ENOEXEC");
+  SAND_SYSERR(mErrno, "EBADF");
+  SAND_SYSERR(mErrno, "ECHILD");
+  SAND_SYSERR(mErrno, "EAGAIN");
+  SAND_SYSERR(mErrno, "ENOMEM");
+  SAND_SYSERR(mErrno, "EACCES");
+  SAND_SYSERR(mErrno, "EFAULT");
+  SAND_SYSERR(mErrno, "ENOTBLK");
+  SAND_SYSERR(mErrno, "EBUSY");
+  SAND_SYSERR(mErrno, "EEXIST");
+  SAND_SYSERR(mErrno, "EXDEV");
+  SAND_SYSERR(mErrno, "ENODEV");
+  SAND_SYSERR(mErrno, "ENOTDIR");
+  SAND_SYSERR(mErrno, "EISDIR");
+  SAND_SYSERR(mErrno, "EINVAL");
+  SAND_SYSERR(mErrno, "ENFILE");
+  SAND_SYSERR(mErrno, "EMFILE");
+  SAND_SYSERR(mErrno, "ENOTTY");
+  SAND_SYSERR(mErrno, "ETXTBSY");
+  SAND_SYSERR(mErrno, "EFBIG");
+  SAND_SYSERR(mErrno, "ENOSPC");
+  SAND_SYSERR(mErrno, "ESPIPE");
+  SAND_SYSERR(mErrno, "EROFS");
+  SAND_SYSERR(mErrno, "EMLINK");
+  SAND_SYSERR(mErrno, "EPIPE");
+  SAND_SYSERR(mErrno, "EDOM");
+  SAND_SYSERR(mErrno, "ERANGE");
+  SAND_SYSERR(mErrno, "EDEADLK");
+  SAND_SYSERR(mErrno, "ENAMETOOLONG");
+  SAND_SYSERR(mErrno, "ENOLCK");
+  SAND_SYSERR(mErrno, "ENOSYS");
+  SAND_SYSERR(mErrno, "ENOTEMPTY");
+  SAND_SYSERR(mErrno, "ELOOP");
+  SAND_SYSERR(mErrno, "EWOULDBLOCK");
+  SAND_SYSERR(mErrno, "ENOMSG");
+  SAND_SYSERR(mErrno, "EIDRM");
+  SAND_SYSERR(mErrno, "ECHRNG");
+  SAND_SYSERR(mErrno, "EL2NSYNC");
+  SAND_SYSERR(mErrno, "EL3HLT");
+  SAND_SYSERR(mErrno, "EL3RST");
+  SAND_SYSERR(mErrno, "ELNRNG");
+  SAND_SYSERR(mErrno, "EUNATCH");
+  SAND_SYSERR(mErrno, "ENOCSI");
+  SAND_SYSERR(mErrno, "EL2HLT");
+  SAND_SYSERR(mErrno, "EBADE");
+  SAND_SYSERR(mErrno, "EBADR");
+  SAND_SYSERR(mErrno, "EXFULL");
+  SAND_SYSERR(mErrno, "ENOANO");
+  SAND_SYSERR(mErrno, "EBADRQC");
+  SAND_SYSERR(mErrno, "EBADSLT");
+  SAND_SYSERR(mErrno, "EDEADLOCK");
+  SAND_SYSERR(mErrno, "EBFONT");
+  SAND_SYSERR(mErrno, "ENOSTR");
+  SAND_SYSERR(mErrno, "ENODATA");
+  SAND_SYSERR(mErrno, "ETIME");
+  SAND_SYSERR(mErrno, "ENOSR");
+  SAND_SYSERR(mErrno, "ENONET");
+  SAND_SYSERR(mErrno, "ENOPKG");
+  SAND_SYSERR(mErrno, "EREMOTE");
+  SAND_SYSERR(mErrno, "ENOLINK");
+  SAND_SYSERR(mErrno, "EADV");
+  SAND_SYSERR(mErrno, "ESRMNT");
+  SAND_SYSERR(mErrno, "ECOMM");
+  SAND_SYSERR(mErrno, "EPROTO");
+  SAND_SYSERR(mErrno, "EMULTIHOP");
+  SAND_SYSERR(mErrno, "EDOTDOT");
+  SAND_SYSERR(mErrno, "EBADMSG");
+  SAND_SYSERR(mErrno, "EOVERFLOW");
+  SAND_SYSERR(mErrno, "ENOTUNIQ");
+  SAND_SYSERR(mErrno, "EBADFD");
+  SAND_SYSERR(mErrno, "EREMCHG");
+  SAND_SYSERR(mErrno, "ELIBACC");
+  SAND_SYSERR(mErrno, "ELIBBAD");
+  SAND_SYSERR(mErrno, "ELIBSCN");
+  SAND_SYSERR(mErrno, "ELIBMAX");
+  SAND_SYSERR(mErrno, "ELIBEXEC");
+  SAND_SYSERR(mErrno, "EILSEQ");
+  SAND_SYSERR(mErrno, "ERESTART");
+  SAND_SYSERR(mErrno, "ESTRPIPE");
+  SAND_SYSERR(mErrno, "EUSERS");
+  SAND_SYSERR(mErrno, "ENOTSOCK");
+  SAND_SYSERR(mErrno, "EDESTADDRREQ");
+  SAND_SYSERR(mErrno, "EMSGSIZE");
+  SAND_SYSERR(mErrno, "EPROTOTYPE");
+  SAND_SYSERR(mErrno, "ENOPROTOOPT");
+  SAND_SYSERR(mErrno, "EPROTONOSUPPORT");
+  SAND_SYSERR(mErrno, "ESOCKTNOSUPPORT");
+  SAND_SYSERR(mErrno, "EOPNOTSUPP");
+  SAND_SYSERR(mErrno, "EPFNOSUPPORT");
+  SAND_SYSERR(mErrno, "EAFNOSUPPORT");
+  SAND_SYSERR(mErrno, "EADDRINUSE");
+  SAND_SYSERR(mErrno, "EADDRNOTAVAIL");
+  SAND_SYSERR(mErrno, "ENETDOWN");
+  SAND_SYSERR(mErrno, "ENETUNREACH");
+  SAND_SYSERR(mErrno, "ENETRESET");
+  SAND_SYSERR(mErrno, "ECONNABORTED");
+  SAND_SYSERR(mErrno, "ECONNRESET");
+  SAND_SYSERR(mErrno, "ENOBUFS");
+  SAND_SYSERR(mErrno, "EISCONN");
+  SAND_SYSERR(mErrno, "ENOTCONN");
+  SAND_SYSERR(mErrno, "ESHUTDOWN");
+  SAND_SYSERR(mErrno, "ETOOMANYREFS");
+  SAND_SYSERR(mErrno, "ETIMEDOUT");
+  SAND_SYSERR(mErrno, "ECONNREFUSED");
+  SAND_SYSERR(mErrno, "EHOSTDOWN");
+  SAND_SYSERR(mErrno, "EHOSTUNREACH");
+  SAND_SYSERR(mErrno, "EALREADY");
+  SAND_SYSERR(mErrno, "EINPROGRESS");
+  SAND_SYSERR(mErrno, "ESTALE");
+  SAND_SYSERR(mErrno, "EUCLEAN");
+  SAND_SYSERR(mErrno, "ENOTNAM");
+  SAND_SYSERR(mErrno, "ENAVAIL");
+  SAND_SYSERR(mErrno, "EISNAM");
+  SAND_SYSERR(mErrno, "EREMOTEIO");
+  SAND_SYSERR(mErrno, "EDQUOT");
 
 #ifndef FFSAFE
   VALUE rb_eLocalJumpError = rb_const_get(rb_cObject, rb_intern("LocalJumpError"));
@@ -1092,6 +1206,13 @@ Init_kit(kit)
   SAND_COPY(cUnboundMethod, "to_s");
   SAND_COPY(cUnboundMethod, "bind");
   SAND_COPY(cModule, "instance_method");
+
+  kit->cBinding = sandbox_defclass(kit, "Binding", kit->cObject);
+  rb_undef_alloc_func(kit->cBinding);
+  SAND_UNDEF(cBinding, "new");
+  SAND_COPY(cBinding, "clone");
+  SAND_COPY(cBinding, "dup");
+  SAND_COPY_KERNEL("binding");
 
   kit->eZeroDivError = sandbox_defclass(kit, "ZeroDivisionError", kit->eStandardError);
   kit->eFloatDomainError = sandbox_defclass(kit, "FloatDomainError", kit->eRangeError);
@@ -1608,6 +1729,28 @@ Init_kit_load(kit)
   */
 }
 
+static void
+Init_kit_env(kit)
+  sandkit *kit;
+{
+}
+
+static void
+Init_kit_real(kit)
+  sandkit *kit;
+{
+  /* FIXME: reimplement */
+  SAND_COPY_KERNEL("abort");
+  SAND_COPY_KERNEL("at_exit");
+  SAND_COPY_KERNEL("caller");
+  SAND_COPY_KERNEL("exit");
+  SAND_COPY_KERNEL("trace_var");
+  SAND_COPY_KERNEL("untrace_var");
+  SAND_COPY_KERNEL("set_trace_func");
+  SAND_COPY_KERNEL("warn");
+
+}
+
 void Init_sand_table()
 {
   VALUE cSandbox = rb_define_class("Sandbox", rb_cObject);
@@ -1632,4 +1775,7 @@ void Init_sand_table()
   Qinit = ID2SYM(rb_intern("init"));
   Qimport = ID2SYM(rb_intern("import"));
   Qload = ID2SYM(rb_intern("load"));
+  Qenv = ID2SYM(rb_intern("env"));
+  Qreal = ID2SYM(rb_intern("real"));
+  Qall = ID2SYM(rb_intern("all"));
 }
