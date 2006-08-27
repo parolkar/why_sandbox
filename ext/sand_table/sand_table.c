@@ -11,6 +11,7 @@
 #define SAND_REV_ID "$Rev$"
 
 static VALUE Qimport, Qinit, Qload, rb_eSandboxException;
+static ID s_options;
 
 static void Init_kit _((sandkit *));
 static void Init_kit_load _((sandkit *));
@@ -173,6 +174,8 @@ sandbox_initialize(argc, argv, self)
       rb_funcall(self, rb_intern("import"), 1, rb_ary_entry(import, i));
     }
   }
+
+  rb_ivar_set(self, s_options, opts);
   return self;
 }
 
@@ -253,6 +256,7 @@ sandbox_whoa_whoa_whoa(go)
   rb_eSysStackError = norm->eSysStackError;
   rb_eLocalJumpError = norm->eLocalJumpError;
 #endif
+  go->kit->active = 0;
 
   go->kit->banished = NULL;
   free(go->norm);
@@ -402,6 +406,7 @@ sandbox_swap_in( self )
   rb_eSysStackError = kit->eSysStackError;
   rb_eLocalJumpError = kit->eLocalJumpError;
 #endif
+  kit->active = 1;
 
   go = ALLOC(go_cart);
   go->exception = Qnil;
@@ -445,24 +450,6 @@ sandbox_eval( self, str )
 }
 
 VALUE
-sandbox_load_begin(go)
-  go_cart *go;
-{
-  go->argv[0] = rb_funcall(rb_cFile, rb_intern("read"), 1, go->argv[0]);
-  return sandbox_go_go_go(go);
-}
-
-VALUE
-sandbox_load( self, path )
-  VALUE self, path;
-{
-  // rb_load(path, 0);
-  go_cart *go = sandbox_swap_in( self );
-  go->argv[0] = path;
-  return rb_ensure(sandbox_load_begin, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
-}
-
-VALUE
 sandbox_import( self, klass )
   VALUE self, klass;
 {
@@ -470,6 +457,22 @@ sandbox_import( self, klass )
   sandkit *kit;
   Data_Get_Struct( self, sandkit, kit );
   sandklass = sandbox_import_class_path( kit, rb_class2name( klass ) );
+  return Qnil;
+}
+
+VALUE
+sandbox_finish( self )
+  VALUE self;
+{
+  sandkit *kit;
+  Data_Get_Struct( self, sandkit, kit );
+  if ( kit->active == 1 ) {
+    go_cart *go = ALLOC(go_cart);
+    go->exception = Qnil;
+    go->norm = kit->banished;
+    go->kit = kit;
+    sandbox_whoa_whoa_whoa(go);
+  }
   return Qnil;
 }
 
@@ -492,22 +495,21 @@ sandbox_safe_eval( self, str )
 }
 
 VALUE
-sandbox_safe_load_begin(go)
-  go_cart *go;
+sandbox_is_active( self )
+  VALUE self;
 {
-  go->argv[0] = rb_funcall(rb_cFile, rb_intern("read"), 1, go->argv[0]);
-  return sandbox_safe_go_go_go(go);
+  sandkit *kit;
+  Data_Get_Struct( self, sandkit, kit );
+  return kit->active == 0 ? Qfalse : Qtrue;
 }
 
 VALUE
-sandbox_safe_load( self, path )
-  VALUE self, path;
+sandbox_get_fatal( self )
+  VALUE self;
 {
-  VALUE marshed;
-  go_cart *go = sandbox_swap_in( self );
-  go->argv[0] = path;
-  marshed = rb_ensure(sandbox_safe_load_begin, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
-  return rb_marshal_load(marshed);
+  sandkit *kit;
+  Data_Get_Struct( self, sandkit, kit );
+  return kit->eFatal;
 }
 
 #ifdef FFSAFE
@@ -1612,18 +1614,21 @@ void Init_sand_table()
   rb_define_const( cSandbox, "VERSION", rb_str_new2( SAND_VERSION ) );
   rb_define_const( cSandbox, "REV_ID", rb_str_new2( SAND_REV_ID ) );
   rb_define_alloc_func( cSandbox, sandbox_alloc );
+  rb_define_attr( cSandbox, "options", 1, 1 );
   rb_define_method( cSandbox, "initialize", sandbox_initialize, -1 );
-  rb_define_method( cSandbox, "eval", sandbox_eval, 1 );
-  rb_define_method( cSandbox, "load", sandbox_load, 1 );
+  rb_define_method( cSandbox, "_eval", sandbox_eval, 1 );
+  rb_define_method( cSandbox, "active?", sandbox_is_active, 0 );
   rb_define_method( cSandbox, "import", sandbox_import, 1 );
+  rb_define_method( cSandbox, "fatal", sandbox_get_fatal, 0 );
+  rb_define_method( cSandbox, "finish", sandbox_finish, 0 );
 #ifdef FFSAFE
   rb_define_singleton_method( cSandbox, "safe", sandbox_safe, 0 );
   cSandboxSafe = rb_define_class_under(cSandbox, "Safe", cSandbox);
-  rb_define_method( cSandboxSafe, "eval", sandbox_safe_eval, 1 );
-  rb_define_method( cSandboxSafe, "load", sandbox_safe_load, 1 );
+  rb_define_method( cSandboxSafe, "_eval", sandbox_safe_eval, 1 );
 #endif
   rb_eSandboxException = rb_define_class_under(cSandbox, "Exception", rb_eException);
 
+  s_options = rb_intern("@options");
   Qinit = ID2SYM(rb_intern("init"));
   Qimport = ID2SYM(rb_intern("import"));
   Qload = ID2SYM(rb_intern("load"));
