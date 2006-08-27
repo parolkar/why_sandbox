@@ -45,13 +45,17 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->mFileTest);
   rb_gc_mark_maybe(kit->cFixnum);
   rb_gc_mark_maybe(kit->cFloat);
+  rb_gc_mark_maybe(kit->mGC);
   rb_gc_mark_maybe(kit->cHash);
   rb_gc_mark_maybe(kit->cInteger);
   rb_gc_mark_maybe(kit->cIO);
+  rb_gc_mark_maybe(kit->mMarshal);
+  rb_gc_mark_maybe(kit->mMath);
   rb_gc_mark_maybe(kit->cMatch);
   rb_gc_mark_maybe(kit->cMethod);
   rb_gc_mark_maybe(kit->cNilClass);
   rb_gc_mark_maybe(kit->cNumeric);
+  rb_gc_mark_maybe(kit->mObSpace);
   rb_gc_mark_maybe(kit->mPrecision);
   rb_gc_mark_maybe(kit->cProc);
   rb_gc_mark_maybe(kit->cRange);
@@ -60,6 +64,7 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->cString);
   rb_gc_mark_maybe(kit->cStruct);
   rb_gc_mark_maybe(kit->cSymbol);
+  rb_gc_mark_maybe(kit->cTime);
   rb_gc_mark_maybe(kit->cTrueClass);
   rb_gc_mark_maybe(kit->cUnboundMethod);
   rb_gc_mark_maybe(kit->eStandardError);
@@ -236,9 +241,11 @@ sandbox_whoa_whoa_whoa(go)
   SWAP_OUT(mFileTest);
   SWAP_OUT(cFixnum);
   SWAP_OUT(cFloat);
+  SWAP_OUT(mGC);
   SWAP_OUT(cHash);
   SWAP_OUT(cInteger);
   SWAP_OUT(cIO);
+  SWAP_OUT(mMath);
   SWAP_OUT(cNilClass);
   SWAP_OUT(cNumeric);
   SWAP_OUT(mPrecision);
@@ -249,6 +256,7 @@ sandbox_whoa_whoa_whoa(go)
   SWAP_OUT(cString);
   SWAP_OUT(cStruct);
   SWAP_OUT(cSymbol);
+  SWAP_OUT(cTime);
   SWAP_OUT(cTrueClass);
   SWAP_OUT(eException);
   SWAP_OUT(eStandardError);
@@ -329,9 +337,11 @@ sandbox_swap_in( self )
   SWAP_IN(mFileTest);
   SWAP_IN(cFixnum);
   SWAP_IN(cFloat);
+  SWAP_IN(mGC);
   SWAP_IN(cHash);
   SWAP_IN(cInteger);
   SWAP_IN(cIO);
+  SWAP_IN(mMath);
   SWAP_IN(cNilClass);
   SWAP_IN(cNumeric);
   SWAP_IN(mPrecision);
@@ -342,6 +352,7 @@ sandbox_swap_in( self )
   SWAP_IN(cString);
   SWAP_IN(cStruct);
   SWAP_IN(cSymbol);
+  SWAP_IN(cTime);
   SWAP_IN(cTrueClass);
   SWAP_IN(eException);
   SWAP_IN(eStandardError);
@@ -1634,6 +1645,125 @@ Init_kit(kit)
   SAND_COPY(mKernel, "__id__");
   SAND_COPY(mKernel, "object_id");
 
+  kit->cTime = sandbox_defclass(kit, "Time", kit->cObject);
+  rb_include_module(kit->cTime, kit->mComparable);
+
+  SAND_COPY_ALLOC(cTime);
+  SAND_COPY_S(cTime, "now");
+  SAND_COPY_S(cTime, "at");
+  SAND_COPY_S(cTime, "utc");
+  SAND_COPY_S(cTime, "gm");
+  SAND_COPY_S(cTime, "local");
+  SAND_COPY_S(cTime, "mktime");
+
+  SAND_COPY_S(cTime, "times");
+
+  SAND_COPY(cTime, "to_i");
+  SAND_COPY(cTime, "to_f");
+  SAND_COPY(cTime, "<=>");
+  SAND_COPY(cTime, "eql?");
+  SAND_COPY(cTime, "hash");
+  SAND_COPY(cTime, "initialize");
+  SAND_COPY(cTime, "initialize_copy");
+
+  SAND_COPY(cTime, "localtime");
+  SAND_COPY(cTime, "gmtime");
+  SAND_COPY(cTime, "utc");
+  SAND_COPY(cTime, "getlocal");
+  SAND_COPY(cTime, "getgm");
+  SAND_COPY(cTime, "getutc");
+
+  SAND_COPY(cTime, "ctime");
+  SAND_COPY(cTime, "asctime");
+  SAND_COPY(cTime, "to_s");
+  SAND_COPY(cTime, "inspect");
+  SAND_COPY(cTime, "to_a");
+
+  SAND_COPY(cTime, "+");
+  SAND_COPY(cTime, "-");
+
+  SAND_COPY(cTime, "succ");
+  SAND_COPY(cTime, "sec");
+  SAND_COPY(cTime, "min");
+  SAND_COPY(cTime, "hour");
+  SAND_COPY(cTime, "mday");
+  SAND_COPY(cTime, "day");
+  SAND_COPY(cTime, "mon");
+  SAND_COPY(cTime, "month");
+  SAND_COPY(cTime, "year");
+  SAND_COPY(cTime, "wday");
+  SAND_COPY(cTime, "yday");
+  SAND_COPY(cTime, "isdst");
+  SAND_COPY(cTime, "dst?");
+  SAND_COPY(cTime, "zone");
+  SAND_COPY(cTime, "gmtoff");
+  SAND_COPY(cTime, "gmt_offset");
+  SAND_COPY(cTime, "utc_offset");
+
+  SAND_COPY(cTime, "utc?");
+  SAND_COPY(cTime, "gmt?");
+
+  SAND_COPY(cTime, "tv_sec");
+  SAND_COPY(cTime, "tv_usec");
+  SAND_COPY(cTime, "usec");
+
+  SAND_COPY(cTime, "strftime");
+
+  /* methods for marshaling */
+  SAND_COPY(cTime, "_dump");
+  SAND_COPY_S(cTime, "_load");
+
+  SAND_COPY_KERNEL("srand");
+  SAND_COPY_KERNEL("rand");
+
+  kit->mMath = sandbox_defmodule(kit, "Math");
+
+  VALUE norm_cFloat = rb_cFloat;
+  rb_cFloat = kit->cFloat;
+  rb_define_const(kit->mMath, "PI", rb_float_new(atan(1.0)*4.0));
+  rb_define_const(kit->mMath, "E", rb_float_new(exp(1.0)));
+  rb_cFloat = norm_cFloat;
+
+  SAND_COPY_S(mMath, "atan2");
+  SAND_COPY_S(mMath, "cos");
+  SAND_COPY_S(mMath, "sin");
+  SAND_COPY_S(mMath, "tan");
+
+  SAND_COPY_S(mMath, "acos");
+  SAND_COPY_S(mMath, "asin");
+  SAND_COPY_S(mMath, "atan");
+
+  SAND_COPY_S(mMath, "cosh");
+  SAND_COPY_S(mMath, "sinh");
+  SAND_COPY_S(mMath, "tanh");
+
+  SAND_COPY_S(mMath, "acosh");
+  SAND_COPY_S(mMath, "asinh");
+  SAND_COPY_S(mMath, "atanh");
+
+  SAND_COPY_S(mMath, "exp");
+  SAND_COPY_S(mMath, "log");
+  SAND_COPY_S(mMath, "log10");
+  SAND_COPY_S(mMath, "sqrt");
+
+  SAND_COPY_S(mMath, "frexp");
+  SAND_COPY_S(mMath, "ldexp");
+
+  SAND_COPY_S(mMath, "hypot");
+
+  SAND_COPY_S(mMath, "erf");
+  SAND_COPY_S(mMath, "erfc");
+
+  VALUE rb_mMarshal = rb_const_get(rb_cObject, rb_intern("Marshal"));
+  kit->mMarshal = sandbox_defmodule(kit, "Marshal");
+
+  SAND_COPY_S(mMarshal, "dump");
+  SAND_COPY_S(mMarshal, "load");
+  SAND_COPY_S(mMarshal, "restore");
+
+  SAND_COPY_CONST(mMarshal, "MAJOR_VERSION");
+  SAND_COPY_CONST(mMarshal, "MINOR_VERSION");
+
   /*
    * dir.c:static VALUE chdir_thread = Qnil;
    * eval.c:VALUE rb_load_path;
@@ -2107,6 +2237,291 @@ Init_kit_real(kit)
   SAND_COPY_KERNEL("set_trace_func");
   SAND_COPY_KERNEL("warn");
 
+  /*
+#ifndef MACOS_UNUSE_SIGNAL
+    VALUE mSignal = rb_define_module("Signal");
+
+    rb_define_global_function("trap", sig_trap, -1);
+    rb_define_module_function(mSignal, "trap", sig_trap, -1);
+    rb_define_module_function(mSignal, "list", sig_list, 0);
+
+    install_sighandler(SIGINT, sighandler);
+#ifdef SIGHUP
+    install_sighandler(SIGHUP, sighandler);
+#endif
+#ifdef SIGQUIT
+    install_sighandler(SIGQUIT, sighandler);
+#endif
+#ifdef SIGALRM
+    install_sighandler(SIGALRM, sighandler);
+#endif
+#ifdef SIGUSR1
+    install_sighandler(SIGUSR1, sighandler);
+#endif
+#ifdef SIGUSR2
+    install_sighandler(SIGUSR2, sighandler);
+#endif
+
+#ifdef SIGBUS
+    install_sighandler(SIGBUS, sigbus);
+#endif
+#ifdef SIGSEGV
+    install_sighandler(SIGSEGV, sigsegv);
+#endif
+#ifdef SIGPIPE
+    install_sighandler(SIGPIPE, sigpipe);
+#endif
+
+#ifdef SIGCLD
+    init_sigchld(SIGCLD);
+#endif
+#ifdef SIGCHLD
+    init_sigchld(SIGCHLD);
+#endif
+
+#endif
+
+    rb_define_virtual_variable("$$", get_pid, 0);
+    rb_define_readonly_variable("$?", &rb_last_status);
+    rb_define_global_function("exec", rb_f_exec, -1);
+    rb_define_global_function("fork", rb_f_fork, 0);
+    rb_define_global_function("exit!", rb_f_exit_bang, -1);
+    rb_define_global_function("system", rb_f_system, -1);
+    rb_define_global_function("sleep", rb_f_sleep, -1);
+
+    rb_mProcess = rb_define_module("Process");
+
+#if !defined(_WIN32) && !defined(DJGPP)
+#ifdef WNOHANG
+    rb_define_const(rb_mProcess, "WNOHANG", INT2FIX(WNOHANG));
+#else
+    rb_define_const(rb_mProcess, "WNOHANG", INT2FIX(0));
+#endif
+#ifdef WUNTRACED
+    rb_define_const(rb_mProcess, "WUNTRACED", INT2FIX(WUNTRACED));
+#else
+    rb_define_const(rb_mProcess, "WUNTRACED", INT2FIX(0));
+#endif
+#endif
+
+    rb_define_singleton_method(rb_mProcess, "fork", rb_f_fork, 0);
+    rb_define_singleton_method(rb_mProcess, "exit!", rb_f_exit_bang, -1);
+    rb_define_singleton_method(rb_mProcess, "exit", rb_f_exit, -1);
+    rb_define_singleton_method(rb_mProcess, "abort", rb_f_abort, -1);
+
+    rb_define_module_function(rb_mProcess, "kill", rb_f_kill, -1);
+    rb_define_module_function(rb_mProcess, "wait", proc_wait, -1);
+    rb_define_module_function(rb_mProcess, "wait2", proc_wait2, -1);
+    rb_define_module_function(rb_mProcess, "waitpid", proc_wait, -1);
+    rb_define_module_function(rb_mProcess, "waitpid2", proc_wait2, -1);
+    rb_define_module_function(rb_mProcess, "waitall", proc_waitall, 0);
+    rb_define_module_function(rb_mProcess, "detach", proc_detach, 1);
+
+    rb_cProcStatus = rb_define_class_under(rb_mProcess, "Status", rb_cObject);
+    rb_undef_method(CLASS_OF(rb_cProcStatus), "new");
+
+    rb_define_method(rb_cProcStatus, "==", pst_equal, 1);
+    rb_define_method(rb_cProcStatus, "&", pst_bitand, 1);
+    rb_define_method(rb_cProcStatus, ">>", pst_rshift, 1);
+    rb_define_method(rb_cProcStatus, "to_i", pst_to_i, 0);
+    rb_define_method(rb_cProcStatus, "to_int", pst_to_i, 0);
+    rb_define_method(rb_cProcStatus, "to_s", pst_to_s, 0);
+    rb_define_method(rb_cProcStatus, "inspect", pst_inspect, 0);
+
+    rb_define_method(rb_cProcStatus, "pid", pst_pid, 0);
+
+    rb_define_method(rb_cProcStatus, "stopped?", pst_wifstopped, 0);
+    rb_define_method(rb_cProcStatus, "stopsig", pst_wstopsig, 0);
+    rb_define_method(rb_cProcStatus, "signaled?", pst_wifsignaled, 0);
+    rb_define_method(rb_cProcStatus, "termsig", pst_wtermsig, 0);
+    rb_define_method(rb_cProcStatus, "exited?", pst_wifexited, 0);
+    rb_define_method(rb_cProcStatus, "exitstatus", pst_wexitstatus, 0);
+    rb_define_method(rb_cProcStatus, "success?", pst_success_p, 0);
+    rb_define_method(rb_cProcStatus, "coredump?", pst_wcoredump, 0);
+
+    rb_define_module_function(rb_mProcess, "pid", get_pid, 0);
+    rb_define_module_function(rb_mProcess, "ppid", get_ppid, 0);
+
+    rb_define_module_function(rb_mProcess, "getpgrp", proc_getpgrp, 0);
+    rb_define_module_function(rb_mProcess, "setpgrp", proc_setpgrp, 0);
+    rb_define_module_function(rb_mProcess, "getpgid", proc_getpgid, 1);
+    rb_define_module_function(rb_mProcess, "setpgid", proc_setpgid, 2);
+
+    rb_define_module_function(rb_mProcess, "setsid", proc_setsid, 0);
+
+    rb_define_module_function(rb_mProcess, "getpriority", proc_getpriority, 2);
+    rb_define_module_function(rb_mProcess, "setpriority", proc_setpriority, 3);
+
+#ifdef HAVE_GETPRIORITY
+    rb_define_const(rb_mProcess, "PRIO_PROCESS", INT2FIX(PRIO_PROCESS));
+    rb_define_const(rb_mProcess, "PRIO_PGRP", INT2FIX(PRIO_PGRP));
+    rb_define_const(rb_mProcess, "PRIO_USER", INT2FIX(PRIO_USER));
+#endif
+
+    rb_define_module_function(rb_mProcess, "getrlimit", proc_getrlimit, 1);
+    rb_define_module_function(rb_mProcess, "setrlimit", proc_setrlimit, -1);
+#ifdef RLIM2NUM
+#ifdef RLIM_INFINITY
+    rb_define_const(rb_mProcess, "RLIM_INFINITY", RLIM2NUM(RLIM_INFINITY));
+#endif
+#ifdef RLIM_SAVED_MAX
+    rb_define_const(rb_mProcess, "RLIM_SAVED_MAX", RLIM2NUM(RLIM_SAVED_MAX));
+#endif
+#ifdef RLIM_SAVED_CUR
+    rb_define_const(rb_mProcess, "RLIM_SAVED_CUR", RLIM2NUM(RLIM_SAVED_CUR));
+#endif
+#ifdef RLIMIT_CORE
+    rb_define_const(rb_mProcess, "RLIMIT_CORE", INT2FIX(RLIMIT_CORE));
+#endif
+#ifdef RLIMIT_CPU
+    rb_define_const(rb_mProcess, "RLIMIT_CPU", INT2FIX(RLIMIT_CPU));
+#endif
+#ifdef RLIMIT_DATA
+    rb_define_const(rb_mProcess, "RLIMIT_DATA", INT2FIX(RLIMIT_DATA));
+#endif
+#ifdef RLIMIT_FSIZE
+    rb_define_const(rb_mProcess, "RLIMIT_FSIZE", INT2FIX(RLIMIT_FSIZE));
+#endif
+#ifdef RLIMIT_NOFILE
+    rb_define_const(rb_mProcess, "RLIMIT_NOFILE", INT2FIX(RLIMIT_NOFILE));
+#endif
+#ifdef RLIMIT_STACK
+    rb_define_const(rb_mProcess, "RLIMIT_STACK", INT2FIX(RLIMIT_STACK));
+#endif
+#ifdef RLIMIT_AS
+    rb_define_const(rb_mProcess, "RLIMIT_AS", INT2FIX(RLIMIT_AS));
+#endif
+#ifdef RLIMIT_MEMLOCK
+    rb_define_const(rb_mProcess, "RLIMIT_MEMLOCK", INT2FIX(RLIMIT_MEMLOCK));
+#endif
+#ifdef RLIMIT_NPROC
+    rb_define_const(rb_mProcess, "RLIMIT_NPROC", INT2FIX(RLIMIT_NPROC));
+#endif
+#ifdef RLIMIT_RSS
+    rb_define_const(rb_mProcess, "RLIMIT_RSS", INT2FIX(RLIMIT_RSS));
+#endif
+#ifdef RLIMIT_SBSIZE
+    rb_define_const(rb_mProcess, "RLIMIT_SBSIZE", INT2FIX(RLIMIT_SBSIZE));
+#endif
+#endif
+
+    rb_define_module_function(rb_mProcess, "uid", proc_getuid, 0);
+    rb_define_module_function(rb_mProcess, "uid=", proc_setuid, 1);
+    rb_define_module_function(rb_mProcess, "gid", proc_getgid, 0);
+    rb_define_module_function(rb_mProcess, "gid=", proc_setgid, 1);
+    rb_define_module_function(rb_mProcess, "euid", proc_geteuid, 0);
+    rb_define_module_function(rb_mProcess, "euid=", proc_seteuid, 1);
+    rb_define_module_function(rb_mProcess, "egid", proc_getegid, 0);
+    rb_define_module_function(rb_mProcess, "egid=", proc_setegid, 1);
+    rb_define_module_function(rb_mProcess, "initgroups", proc_initgroups, 2);
+    rb_define_module_function(rb_mProcess, "groups", proc_getgroups, 0);
+    rb_define_module_function(rb_mProcess, "groups=", proc_setgroups, 1);
+    rb_define_module_function(rb_mProcess, "maxgroups", proc_getmaxgroups, 0);
+    rb_define_module_function(rb_mProcess, "maxgroups=", proc_setmaxgroups, 1);
+
+    rb_define_module_function(rb_mProcess, "times", rb_proc_times, 0);
+
+#if defined(HAVE_TIMES) || defined(_WIN32)
+    S_Tms = rb_struct_define("Tms", "utime", "stime", "cutime", "cstime", NULL);
+#endif
+
+    SAVED_USER_ID = geteuid();
+    SAVED_GROUP_ID = getegid();
+
+    rb_mProcUID = rb_define_module_under(rb_mProcess, "UID");
+    rb_mProcGID = rb_define_module_under(rb_mProcess, "GID");
+
+    rb_define_module_function(rb_mProcUID, "rid", proc_getuid, 0);
+    rb_define_module_function(rb_mProcGID, "rid", proc_getgid, 0);
+    rb_define_module_function(rb_mProcUID, "eid", proc_geteuid, 0);
+    rb_define_module_function(rb_mProcGID, "eid", proc_getegid, 0);
+    rb_define_module_function(rb_mProcUID, "change_privilege", p_uid_change_privilege, 1);
+    rb_define_module_function(rb_mProcGID, "change_privilege", p_gid_change_privilege, 1);
+    rb_define_module_function(rb_mProcUID, "grant_privilege", p_uid_grant_privilege, 1);
+    rb_define_module_function(rb_mProcGID, "grant_privilege", p_gid_grant_privilege, 1);
+    rb_define_alias(rb_mProcUID, "eid=", "grant_privilege");
+    rb_define_alias(rb_mProcGID, "eid=", "grant_privilege");
+    rb_define_module_function(rb_mProcUID, "re_exchange", p_uid_exchange, 0);
+    rb_define_module_function(rb_mProcGID, "re_exchange", p_gid_exchange, 0);
+    rb_define_module_function(rb_mProcUID, "re_exchangeable?", p_uid_exchangeable, 0);
+    rb_define_module_function(rb_mProcGID, "re_exchangeable?", p_gid_exchangeable, 0);
+    rb_define_module_function(rb_mProcUID, "sid_available?", p_uid_have_saved_id, 0);
+    rb_define_module_function(rb_mProcGID, "sid_available?", p_gid_have_saved_id, 0);
+    rb_define_module_function(rb_mProcUID, "switch", p_uid_switch, 0);
+    rb_define_module_function(rb_mProcGID, "switch", p_gid_switch, 0);
+
+    rb_mProcID_Syscall = rb_define_module_under(rb_mProcess, "Sys");
+
+    rb_define_module_function(rb_mProcID_Syscall, "getuid", proc_getuid, 0);
+    rb_define_module_function(rb_mProcID_Syscall, "geteuid", proc_geteuid, 0);
+    rb_define_module_function(rb_mProcID_Syscall, "getgid", proc_getgid, 0);
+    rb_define_module_function(rb_mProcID_Syscall, "getegid", proc_getegid, 0);
+
+    rb_define_module_function(rb_mProcID_Syscall, "setuid", p_sys_setuid, 1);
+    rb_define_module_function(rb_mProcID_Syscall, "setgid", p_sys_setgid, 1);
+
+    rb_define_module_function(rb_mProcID_Syscall, "setruid", p_sys_setruid, 1);
+    rb_define_module_function(rb_mProcID_Syscall, "setrgid", p_sys_setrgid, 1);
+
+    rb_define_module_function(rb_mProcID_Syscall, "seteuid", p_sys_seteuid, 1);
+    rb_define_module_function(rb_mProcID_Syscall, "setegid", p_sys_setegid, 1);
+
+    rb_define_module_function(rb_mProcID_Syscall, "setreuid", p_sys_setreuid, 2);
+    rb_define_module_function(rb_mProcID_Syscall, "setregid", p_sys_setregid, 2);
+
+    rb_define_module_function(rb_mProcID_Syscall, "setresuid", p_sys_setresuid, 3);
+    rb_define_module_function(rb_mProcID_Syscall, "setresgid", p_sys_setresgid, 3);
+    rb_define_module_function(rb_mProcID_Syscall, "issetugid", p_sys_issetugid, 0);
+  */
+  kit->mGC = sandbox_defmodule(kit, "GC");
+  SAND_COPY_S(mGC, "start");
+  SAND_COPY_S(mGC, "enable");
+  SAND_COPY_S(mGC, "disable");
+  SAND_COPY(mGC, "garbage_collect");
+
+  VALUE rb_mObSpace = rb_const_get_at(rb_cObject, rb_intern("ObjectSpace"));
+  kit->mObSpace = sandbox_defmodule(kit, "ObjectSpace");
+  SAND_COPY_S(mObSpace, "each_object");
+  SAND_COPY_S(mObSpace, "garbage_collect");
+  SAND_COPY_S(mObSpace, "add_finalizer");
+  SAND_COPY_S(mObSpace, "remove_finalizer");
+  SAND_COPY_S(mObSpace, "finalizers");
+  SAND_COPY_S(mObSpace, "call_finalizer");
+
+  SAND_COPY_S(mObSpace, "define_finalizer");
+  SAND_COPY_S(mObSpace, "undefine_finalizer");
+
+  SAND_COPY_S(mObSpace, "_id2ref");
+
+  /*
+  rb_gc_register_address(&rb_mObSpace);
+  rb_global_variable(&finalizers);
+  rb_gc_unregister_address(&rb_mObSpace);
+  finalizers = rb_ary_new();
+
+  source_filenames = st_init_strtable();
+
+  rb_global_variable(&nomem_error);
+  nomem_error = rb_exc_new2(rb_eNoMemError, "failed to allocate memory");
+  */
+
+  SAND_COPY(mKernel, "hash");
+  SAND_COPY(mKernel, "__id__");
+  SAND_COPY(mKernel, "object_id");
+
+  /*
+  VALUE v = rb_obj_freeze(rb_str_new2(ruby_version));
+  VALUE d = rb_obj_freeze(rb_str_new2(ruby_release_date));
+  VALUE p = rb_obj_freeze(rb_str_new2(ruby_platform));
+
+  rb_define_global_const("RUBY_VERSION", v);
+  rb_define_global_const("RUBY_RELEASE_DATE", d);
+  rb_define_global_const("RUBY_PLATFORM", p);
+
+  rb_define_global_const("VERSION", v);
+  rb_define_global_const("RELEASE_DATE", d);
+  rb_define_global_const("PLATFORM", p);
+  */
 }
 
 void Init_sand_table()

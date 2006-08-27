@@ -64,13 +64,17 @@ typedef struct SANDKIT {
   VALUE mFileTest;
   VALUE cFixnum;
   VALUE cFloat;
+  VALUE mGC;
   VALUE cHash;
   VALUE cInteger;
   VALUE cIO;
+  VALUE mMarshal;
+  VALUE mMath;
   VALUE cMatch;
   VALUE cMethod;
   VALUE cNilClass;
   VALUE cNumeric;
+  VALUE mObSpace;
   VALUE mPrecision;
   VALUE cProc;
   VALUE cRange;
@@ -79,6 +83,7 @@ typedef struct SANDKIT {
   VALUE cString;
   VALUE cStruct;
   VALUE cSymbol;
+  VALUE cTime;
   VALUE cTrueClass;
   VALUE cUnboundMethod;
   VALUE eStandardError;
