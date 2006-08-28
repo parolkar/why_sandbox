@@ -332,6 +332,21 @@ static VALUE var_getter();
 static void  var_setter();
 static void  var_marker();
 
+VALUE
+rb_swap_global(name, val)
+  char *name;
+  VALUE val;
+{
+  struct global_entry *entry;
+  if (st_lookup(rb_global_tbl, rb_intern(name), (st_data_t *)&entry)) {
+    VALUE *ptr = (VALUE *)entry->var->data;
+    VALUE old = *ptr;
+    *ptr = val;
+    return old;
+  }
+  return Qnil;
+}
+
 struct global_entry*
 sandbox_global_entry(kit, id)
   sandkit *kit;

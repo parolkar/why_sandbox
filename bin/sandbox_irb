@@ -18,4 +18,4 @@ class InOut
 end
 
 puts "Sandbox IRB (v#{Sandbox::BUILD})"
-Sandbox::IRB.new(Sandbox.new).start(InOut.new)
+Sandbox::IRB.new(Sandbox.new(:init => [:all])).start(InOut.new)

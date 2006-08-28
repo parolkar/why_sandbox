@@ -94,6 +94,8 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->eLoadError);
   rb_gc_mark_maybe(kit->eLocalJumpError);
   rb_gc_mark_maybe(kit->mErrno);
+  rb_gc_mark_maybe(kit->load_path);
+  rb_gc_mark_maybe(kit->loaded_features);
   rb_gc_mark((VALUE)kit->scope);
 #ifdef FFSAFE
   if (kit->globals != NULL)
@@ -214,6 +216,8 @@ typedef struct {
 
 #define SWAP_OUT(N) if (kit->N != 0) { rb_##N = norm->N; }
 #define SWAP_IN(N) if (kit->N != 0) { norm->N = rb_##N; rb_##N = kit->N; }
+#define SWAP_GVAR_OUT(N, V) if (kit->V != 0) { rb_swap_global(N, norm->V); }
+#define SWAP_GVAR_IN(N, V) if (kit->V != 0) { norm->V = rb_swap_global(N, kit->V); }
 
 VALUE
 sandbox_whoa_whoa_whoa(go)
@@ -295,6 +299,8 @@ sandbox_whoa_whoa_whoa(go)
   SWAP_OUT(eSysStackError);
   SWAP_OUT(eLocalJumpError);
 #endif
+  SWAP_GVAR_OUT("$LOAD_PATH", load_path);
+  SWAP_GVAR_OUT("$LOADED_FEATURES", loaded_features);
   go->kit->active = 0;
 
   go->kit->banished = NULL;
@@ -379,6 +385,8 @@ sandbox_swap_in( self )
   SWAP_IN(eSyntaxError);
   SWAP_IN(eLoadError);
   SWAP_IN(mErrno);
+  SWAP_GVAR_IN("$LOAD_PATH", load_path);
+  SWAP_GVAR_IN("$LOADED_FEATURES", loaded_features);
   norm->oMain = ruby_top_self;
   ruby_top_self = kit->oMain;
   norm->scope = ruby_scope;
@@ -1799,12 +1807,12 @@ static void
 Init_kit_load(kit)
   sandkit *kit;
 {
-  rb_define_readonly_variable("$:", &kit->load_path);
-  rb_define_readonly_variable("$-I", &kit->load_path);
-  rb_define_readonly_variable("$LOAD_PATH", &kit->load_path);
+  sandbox_define_readonly_variable(kit, "$:", &kit->load_path);
+  sandbox_define_readonly_variable(kit, "$-I", &kit->load_path);
+  sandbox_define_readonly_variable(kit, "$LOAD_PATH", &kit->load_path);
 
-  rb_define_readonly_variable("$\"", &kit->loaded_features);
-  rb_define_readonly_variable("$LOADED_FEATURES", &kit->loaded_features);
+  sandbox_define_readonly_variable(kit, "$\"", &kit->loaded_features);
+  sandbox_define_readonly_variable(kit, "$LOADED_FEATURES", &kit->loaded_features);
 
   SAND_COPY_KERNEL("load");
   SAND_COPY_KERNEL("require");
@@ -2513,15 +2521,15 @@ Init_kit_real(kit)
   VALUE v = rb_obj_freeze(rb_str_new2(ruby_version));
   VALUE d = rb_obj_freeze(rb_str_new2(ruby_release_date));
   VALUE p = rb_obj_freeze(rb_str_new2(ruby_platform));
-
-  rb_define_global_const("RUBY_VERSION", v);
-  rb_define_global_const("RUBY_RELEASE_DATE", d);
-  rb_define_global_const("RUBY_PLATFORM", p);
-
-  rb_define_global_const("VERSION", v);
-  rb_define_global_const("RELEASE_DATE", d);
-  rb_define_global_const("PLATFORM", p);
   */
+
+  SAND_COPY_CONST(cObject, "RUBY_VERSION");
+  SAND_COPY_CONST(cObject, "RUBY_RELEASE_DATE");
+  SAND_COPY_CONST(cObject, "RUBY_PLATFORM");
+
+  SAND_COPY_CONST(cObject, "VERSION");
+  SAND_COPY_CONST(cObject, "RELEASE_DATE");
+  SAND_COPY_CONST(cObject, "PLATFORM");
 }
 
 void Init_sand_table()
