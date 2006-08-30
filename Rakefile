@@ -8,7 +8,7 @@ include FileUtils
 
 NAME = "sandbox"
 REV = File.read(".svn/entries")[/committed-rev="(\d+)"/, 1] rescue nil
-VERS = "0.0" + (REV ? ".#{REV}" : "")
+VERS = ENV['VERSION'] || ("0.1" + (REV ? ".#{REV}" : ""))
 CLEAN.include ['ext/sand_table/*.{bundle,o,so,obj,pdb,lib,def,exp}', 'ext/sand_table/Makefile', 
                '**/.*.sw?', '*.gem', '.config']
 
