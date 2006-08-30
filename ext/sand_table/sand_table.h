@@ -123,6 +123,7 @@ typedef struct SANDKIT {
   st_table *loading_tbl;
 
   NODE *top_cref;
+  NODE *ruby_cref;
   struct SCOPE *scope;
   struct SANDKIT *banished;
   int active;
@@ -160,6 +161,7 @@ void sandbox_define_variable(sandkit *kit, const char *, VALUE *);
 void sandbox_define_readonly_variable(sandkit *, const char  *, VALUE *);
 void sandbox_define_virtual_variable(sandkit *, const char *, VALUE (*)(), void (*)());
 void sandbox_mark_globals(st_table *);
+void sandbox_errinfo_setter(VALUE val, ID id, VALUE *var);
 #endif
 
 #if defined(__cplusplus)

@@ -653,4 +653,16 @@ sandbox_mark_globals(st_table *tbl)
     st_foreach(tbl, sandbox_mark_global, 0);
   }
 }
+
+void
+sandbox_errinfo_setter(val, id, var)
+  VALUE val;
+  ID id;
+  VALUE *var;
+{   
+  if (!NIL_P(val) && !rb_obj_is_kind_of(val, rb_eException)) {
+    rb_raise(rb_eTypeError, "assigning non-exception to $!");
+  }
+  *var = val;
+}  
 #endif

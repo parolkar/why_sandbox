@@ -98,6 +98,7 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->loaded_features);
   rb_gc_mark((VALUE)kit->scope);
   rb_gc_mark((VALUE)kit->top_cref);
+  rb_gc_mark((VALUE)kit->ruby_cref);
 #ifdef FFSAFE
   if (kit->globals != NULL)
     sandbox_mark_globals(kit->globals);
@@ -142,6 +143,7 @@ sandbox_alloc(class)
   _scope->flags = 0;
   kit->scope = _scope;
   kit->top_cref = rb_node_newnode(NODE_CREF,kit->cObject,0,0);
+  kit->ruby_cref = kit->top_cref;
 
   return Data_Wrap_Struct( class, mark_sandbox, free_sandbox, kit );
 }
@@ -292,6 +294,7 @@ sandbox_whoa_whoa_whoa(go)
   ruby_top_self = norm->oMain;
   ruby_scope = norm->scope;
   top_cref = norm->top_cref;
+  ruby_cref = norm->ruby_cref;
 #ifdef FFSAFE
   rb_global_tbl = norm->globals;
   SWAP_OUT(cMatch);
@@ -395,6 +398,8 @@ sandbox_swap_in( kit )
   ruby_scope = kit->scope;
   norm->top_cref = top_cref;
   top_cref = kit->top_cref;
+  norm->ruby_cref = ruby_cref;
+  ruby_cref = kit->ruby_cref;
 #ifdef FFSAFE
   norm->globals = rb_global_tbl;
   rb_global_tbl = kit->globals;
@@ -422,7 +427,10 @@ VALUE
 sandbox_main_eval(go)
   go_cart *go;
 {
-  return rb_mod_module_eval(1, go->argv, go->kit->cObject);
+  // return rb_mod_module_eval(1, go->argv, go->kit->cObject);
+  VALUE str = go->argv[0];
+  StringValue(str);
+  return rb_eval_string(RSTRING(str)->ptr);
 }
 
 VALUE
@@ -775,6 +783,7 @@ Init_kit(kit)
   rb_define_virtual_variable("$@", errat_getter, errat_setter);
   rb_define_hooked_variable("$!", &ruby_errinfo, 0, errinfo_setter);
   */
+  sandbox_define_hooked_variable(kit, "$!", &ruby_errinfo, 0, sandbox_errinfo_setter);
 
   SAND_COPY_KERNEL("eval");
   SAND_COPY_KERNEL("iterator?");
