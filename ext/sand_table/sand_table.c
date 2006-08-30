@@ -172,7 +172,7 @@ sandbox_initialize(argc, argv, self)
     int i;
     int init_load = 0, init_env = 0, init_io = 0, init_real = 0;
     sandkit *kit;
-    Check_Type(init, T_ARRAY);
+    init = rb_Array(init);
     Data_Get_Struct( self, sandkit, kit );
     for ( i = 0; i < RARRAY(init)->len; i++ )
     {
