@@ -121,7 +121,22 @@ sandbox_singleton_class(kit, obj)
 }
 
 VALUE
-sandbox_defclass(kit, name, super)
+sandbox_defclass_id(kit, id, super)
+  sandkit *kit;
+  ID id;
+  VALUE super;
+{   
+  VALUE klass;
+
+  if (!super) super = kit->cObject;
+  klass = rb_class_new(super);
+  sandbox_metaclass(kit, klass, RBASIC(super)->klass);
+
+  return klass;
+}
+
+VALUE
+sandbox_bootclass(kit, name, super)
   sandkit *kit;
   const char *name;
   VALUE super;
@@ -133,6 +148,73 @@ sandbox_defclass(kit, name, super)
   st_add_direct(kit->tbl, id, obj);
   rb_const_set((kit->cObject ? kit->cObject : obj), id, obj);
   return obj;
+}
+
+VALUE
+sandbox_defclass(kit, name, super)
+  sandkit *kit;
+  const char *name;
+  VALUE super;
+{   
+  VALUE klass;
+  ID id;
+
+  id = rb_intern(name);
+  if (rb_const_defined(kit->cObject, id)) {
+    klass = rb_const_get(kit->cObject, id);
+    if (TYPE(klass) != T_CLASS) {
+        rb_raise(rb_eTypeError, "%s is not a class", name);
+    }
+    if (rb_class_real(RCLASS(klass)->super) != super) {
+        rb_name_error(id, "%s is already defined", name);
+    }
+    return klass;
+  }
+  if (!super) {
+    rb_warn("no super class for `%s', Object assumed", name);
+  }
+  klass = sandbox_defclass_id(kit, id, super);
+  st_add_direct(kit->tbl, id, klass);
+  rb_name_class(klass, id);
+  rb_const_set(kit->cObject, id, klass);
+  if (!super) super = kit->cObject;
+  rb_class_inherited(super, klass);
+
+  return klass;
+}
+
+VALUE
+sandbox_defclass_under(kit, outer, name, super)
+  sandkit *kit;
+  VALUE outer;
+  const char *name;
+  VALUE super;
+{
+  VALUE klass;
+  ID id;
+
+  id = rb_intern(name);
+  if (rb_const_defined_at(outer, id)) {
+    klass = rb_const_get_at(outer, id);
+    if (TYPE(klass) != T_CLASS) {
+        rb_raise(rb_eTypeError, "%s is not a class", name);
+    }
+    if (rb_class_real(RCLASS(klass)->super) != super) {
+        rb_name_error(id, "%s is already defined", name);
+    }
+    return klass;
+  }
+  if (!super) {
+    rb_warn("no super class for `%s::%s', Object assumed",
+      rb_class2name(outer), name);
+  }
+  klass = sandbox_defclass_id(kit, id, super);
+  rb_set_class_path(klass, outer, name);
+  rb_const_set(outer, id, klass);
+  if (!super) super = kit->cObject;
+  rb_class_inherited(super, klass);
+
+  return klass;
 }
 
 VALUE
@@ -153,6 +235,30 @@ sandbox_defmodule(kit, name)
   module = sandbox_define_module_id(kit, id);
   st_add_direct(kit->tbl, id, module);
   rb_const_set(kit->cObject, id, module);
+
+  return module;
+}
+
+VALUE
+sandbox_defmodule_under(kit, outer, name)
+  sandkit *kit;
+  VALUE outer;
+  const char *name;
+{
+  VALUE module;
+  ID id;
+
+  id = rb_intern(name);
+  if (rb_const_defined_at(outer, id)) {
+    module = rb_const_get_at(outer, id);
+    if (TYPE(module) == T_MODULE)
+      return module;
+    rb_raise(rb_eTypeError, "%s::%s is not a module",
+      rb_class2name(outer), rb_obj_classname(module));
+  }
+  module = sandbox_define_module_id(kit, id);
+  rb_const_set(outer, id, module);
+  rb_set_class_path(module, outer, name);
 
   return module;
 }
@@ -187,14 +293,13 @@ sandbox_copy_method(klass, def, oklass)
     rb_warn("%s: no method %s found for copying", FREAKYFREAKY, rb_id2name(def));
     return;
   }
-  /* FIXME: why won't visi apply here? */
   noex = body->nd_noex;
   body = body->nd_body;
   if (nd_type(body) == NODE_FBODY)
   {
     body = body->nd_head;
   }
-  rb_add_method(klass, def, NEW_CFUNC(body->nd_cfnc, body->nd_argc), noex);
+  rb_add_method(klass, def, body, noex);
 }
 
 static int

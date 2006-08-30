@@ -315,12 +315,11 @@ sandbox_whoa_whoa_whoa(go)
 }
 
 go_cart *
-sandbox_swap_in( self )
-  VALUE self;
+sandbox_swap_in( kit )
+  sandkit *kit;
 {
-  sandkit *kit, *norm;
+  sandkit *norm;
   go_cart *go;
-  Data_Get_Struct( self, sandkit, kit );
 
   /* save everything */
   norm = ALLOC(sandkit);
@@ -441,7 +440,10 @@ VALUE
 sandbox_eval( self, str )
   VALUE self, str;
 {
-  go_cart *go = sandbox_swap_in( self );
+  go_cart *go;
+  sandkit *kit;
+  Data_Get_Struct( self, sandkit, kit );
+  go = sandbox_swap_in( kit );
   go->argv[0] = str;
   return rb_ensure(sandbox_go_go_go, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
 }
@@ -485,7 +487,10 @@ sandbox_safe_eval( self, str )
   VALUE self, str;
 {
   VALUE marshed;
-  go_cart *go = sandbox_swap_in( self );
+  go_cart *go;
+  sandkit *kit;
+  Data_Get_Struct( self, sandkit, kit );
+  go = sandbox_swap_in( kit );
   go->argv[0] = str;
   marshed = rb_ensure(sandbox_safe_go_go_go, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
   return rb_marshal_load(marshed);
@@ -507,6 +512,18 @@ sandbox_get_fatal( self )
   sandkit *kit;
   Data_Get_Struct( self, sandkit, kit );
   return kit->eFatal;
+}
+
+VALUE
+sandbox_dup_into( kit, obj )
+  sandkit *kit;
+  VALUE obj;
+{
+  VALUE sandobj = rb_marshal_dump(obj, Qnil);
+  go_cart *go = sandbox_swap_in(kit);
+  sandobj = rb_marshal_load(sandobj);
+  sandbox_whoa_whoa_whoa(go);
+  return sandobj;
 }
 
 #ifdef FFSAFE
@@ -531,9 +548,9 @@ Init_kit(kit)
 #endif
   kit->cObject = 0;
 
-  kit->cObject = sandbox_defclass(kit, "Object", 0);
-  kit->cModule = sandbox_defclass(kit, "Module", kit->cObject);
-  kit->cClass =  sandbox_defclass(kit, "Class",  kit->cModule);
+  kit->cObject = sandbox_bootclass(kit, "Object", 0);
+  kit->cModule = sandbox_bootclass(kit, "Module", kit->cObject);
+  kit->cClass =  sandbox_bootclass(kit, "Class",  kit->cModule);
 
   metaclass = sandbox_metaclass(kit, kit->cObject, kit->cClass);
   metaclass = sandbox_metaclass(kit, kit->cModule, metaclass);
@@ -806,7 +823,7 @@ Init_kit(kit)
 
   SAND_COPY(mKernel, "extend");
 
-  kit->cString  = sandbox_defclass(kit, "String", kit->cObject);
+  kit->cString = sandbox_defclass(kit, "String", kit->cObject);
   rb_include_module(kit->cString, kit->mComparable);
   rb_include_module(kit->cString, kit->mEnumerable);
   SAND_COPY_ALLOC(cString);
@@ -958,7 +975,7 @@ Init_kit(kit)
 #ifndef FFSAFE
   VALUE rb_cNameErrorMesg = rb_const_get_at(rb_eNameError, rb_intern("message"));
 #endif
-  kit->cNameErrorMesg = rb_define_class_under(kit->eNameError, "message", kit->cData);
+  kit->cNameErrorMesg = sandbox_defclass_under(kit, kit->eNameError, "message", kit->cData);
   SAND_COPY(cNameErrorMesg, "to_str");
   SAND_COPY(cNameErrorMesg, "_dump");
   if (rb_respond_to(rb_cNameErrorMesg, rb_intern("!"))) {
@@ -1795,8 +1812,8 @@ Init_kit(kit)
    * io.c:VALUE rb_output_rs;
    * io.c:VALUE rb_default_rs;
    */
-  kit->load_path = rb_ary_new();
-  kit->loaded_features = rb_ary_new();
+  kit->load_path = sandbox_dup_into(kit, rb_ary_new());
+  kit->loaded_features = sandbox_dup_into(kit, rb_ary_new());
 #ifdef FFSAFE
   kit->_progname = sandbox_str(kit, "(sandbox)");
   sandbox_define_hooked_variable(kit, "$0", &kit->_progname, 0, 0);
@@ -2019,7 +2036,7 @@ Init_kit_io(kit)
   SAND_COPY(cFile, "flock");
 
   VALUE rb_mFConst = rb_const_get_at(rb_cFile, rb_intern("Constants"));
-  kit->mFConst = rb_define_module_under(kit->cFile, "Constants");
+  kit->mFConst = sandbox_defmodule_under(kit, kit->cFile, "Constants");
   rb_include_module(kit->cIO, kit->mFConst);
   SAND_COPY_CONST(mFConst, "LOCK_SH");
   SAND_COPY_CONST(mFConst, "LOCK_EX");
@@ -2029,7 +2046,7 @@ Init_kit_io(kit)
   SAND_COPY(cFile, "path");
   SAND_COPY_KERNEL("test");
 
-  kit->cStat = rb_define_class_under(kit->cFile, "Stat", kit->cObject);
+  kit->cStat = sandbox_defclass_under(kit, kit->cFile, "Stat", kit->cObject);
   SAND_COPY_ALLOC(cStat);
   SAND_COPY(cStat, "initialize");
   SAND_COPY(cStat, "initialize_copy");
@@ -2159,6 +2176,7 @@ Init_kit_env(kit)
   SAND_COPY_KERNEL("p");
   SAND_COPY(mKernel, "display");
 
+  kit->load_path = sandbox_dup_into(kit, rb_gv_get("$LOAD_PATH"));
   /*
   rb_define_variable("$stdin", &rb_stdin);
   rb_stdin = prep_stdio(stdin, FMODE_READABLE, rb_cIO);
