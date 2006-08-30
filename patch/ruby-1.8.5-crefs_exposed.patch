@@ -1,0 +1,213 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+ <title>InstallingTheSandbox: ruby-1.8.5-crefs_exposed.patch on (Freaky Freaky) Sandbox</title><link rel="start" href="/sandbox/wiki" /><link rel="search" href="/sandbox/search" /><link rel="help" href="/sandbox/wiki/TracGuide" /><link rel="stylesheet" href="/sandbox/chrome/common/css/trac.css" type="text/css" /><link rel="stylesheet" href="/sandbox/chrome/common/css/diff.css" type="text/css" /><link rel="stylesheet" href="/sandbox/chrome/common/css/code.css" type="text/css" /><link rel="icon" href="/sandbox/chrome/common/trac.ico" type="image/x-icon" /><link rel="shortcut icon" href="/sandbox/chrome/common/trac.ico" type="image/x-icon" /><link rel="up" href="/sandbox/wiki/InstallingTheSandbox" title="InstallingTheSandbox" /><link rel="alternate" href="/sandbox/attachment/wiki/InstallingTheSandbox/ruby-1.8.5-crefs_exposed.patch?format=raw" title="Original Format" type="text/x-diff; charset=iso-8859-15" /><style type="text/css">
+body, th, td {
+    font: normal 14px verdana,arial,'Bitstream Vera Sans',helvetica,sans-serif;
+    line-height: 160%;
+    margin-bottom: 30px;
+}
+h1, h2, h3, h4 {
+    font-family: Utopia, Georgia, serif;
+    font-weight: bold;
+    letter-spacing: -0.018em;
+}
+h1 { font-size: 24px; margin: .15em 1em 0 0 }
+h2 { font-size: 19px }
+h3 { font-size: 17px }
+
+/* Link styles */
+:link, :visited {
+    color: #00b;
+}
+:link:hover, :visited:hover {
+    background-color: #eee;
+    color: #555;
+}
+#page {
+    width: 720px;
+    margin: 0 auto;
+}
+#header {
+    float: left;
+    width: 141px;
+}
+#header h1 {
+    font-size: 32px;
+    padding: 0; margin: 0;
+    margin-top: 35px;
+    margin-bottom: -32px;
+    color: #666;
+}
+h1.camping {
+    margin: 0; padding: 0;
+    text-align:right;
+}
+#banner {
+    margin: 0; padding: 0;
+    margin-left: 180px;
+    /* margin-top: -110px; */
+    margin-top: -15px;
+    float: left;
+}
+#mainnav {
+    background: none;
+    border: none;
+    padding-bottom: 5px;
+    margin: 0;
+}
+#mainnav ul {
+    font-size: 13px;
+    margin-left: -32px;
+}
+#mainnav li {
+    padding-left: 6px;
+}
+#mainnav :link, #mainnav :visited {
+    background: none;
+    border: none;
+    padding: 2px 4px;
+    color: #961;
+}
+#mainnav .active :link, #mainnav .active :visited {
+    background: none;
+    border: none;
+    color: inherit;
+    padding: 3px 4px;
+}
+#mainnav :link:hover, #mainnav :visited:hover,
+#mainnav .active :link:hover, #mainnav .active :visited:hover {
+    background: none;
+    border: none;
+    border-bottom: solid 3px #d50;
+}
+#main {
+    border: solid 1px #f70;
+    padding: 8px 20px;
+    margin-bottom: 6px;
+}
+#main {
+    clear: both;
+}
+.wikipage ul {
+    padding-left: 15px;
+}
+.wikipage tt {
+    color: #353;
+    font-size: 15px;
+    white-space: nowrap;
+    font-weight: bold;
+}
+dl#overview {
+    font-size: 13px;
+}
+table#chglist .summary, td.change span.change {
+    font-size: 9px;
+}
+</style>
+ <script type="text/javascript" src="/sandbox/chrome/common/js/trac.js"></script>
+</head>
+<body>
+
+
+
+<div id="page">
+<div id="header"><a id="logo" href="http://example.org/"><img src="/sandbox/chrome/site/images/sandbox-small.png" alt="f.f.sandbox" /></a><hr /></div>
+
+<div id="banner">
+<!-- <h1 class="camping"><img src="/camping/chrome/site/images/camping-title2.png" /></p> -->
+<form id="search" action="/sandbox/search" method="get">
+ <div>
+  <label for="proj-search">Search:</label>
+  <input type="text" id="proj-search" name="q" size="10" accesskey="f" value="" />
+  <input type="submit" value="Search" />
+  <input type="hidden" name="wiki" value="on" />
+  <input type="hidden" name="changeset" value="on" />
+  <input type="hidden" name="ticket" value="on" />
+ </div>
+</form>
+
+
+
+<div id="mainnav" class="nav"><ul><li class="active first"><a accesskey="1" href="/sandbox/wiki">Wiki</a></li><li><a accesskey="2" href="/sandbox/timeline">Timeline</a></li><li><a accesskey="3" href="/sandbox/roadmap">Roadmap</a></li><li><a href="/sandbox/browser">Browse Source</a></li><li><a href="/sandbox/report">View Tickets</a></li><li class="last"><a accesskey="4" href="/sandbox/search">Search</a></li></ul></div>
+</div>
+<div id="main">
+
+
+
+
+<div id="ctxtnav" class="nav"></div>
+
+<div id="content" class="attachment">
+
+
+ <h1><a href="/sandbox/wiki/InstallingTheSandbox">InstallingTheSandbox</a>: ruby-1.8.5-crefs_exposed.patch</h1>
+ <table id="info" summary="Description"><tbody><tr>
+   <th scope="col">
+    File ruby-1.8.5-crefs_exposed.patch, 0.8 kB 
+    (added by why,  1 hour ago)
+   </th></tr><tr>
+   <td class="message"><p>
+Patch to expose a few Ruby nodes for the sandbox's purposes.
+</p>
+</td>
+  </tr>
+ </tbody></table>
+ <div id="preview">
+   
+
+
+<div class="diff"><ul class="entries"><li class="entry">
+  <h2>ruby-1.8.5/eval.c</h2>
+  <table class="inline" summary="Differences" cellspacing="0">
+   <colgroup><col class="lineno" /><col class="lineno" /><col class="content" /></colgroup>
+   <thead><tr>
+    <th>old</th>
+    <th>new</th>
+    <th>&nbsp;</th>
+   </tr></thead><tbody><tr><th>1061</th><th>1061</th><td class="l"><span>#define POP_CLASS() ruby_class = _class; \</span>&nbsp;</td></tr><tr><th>1062</th><th>1062</th><td class="l"><span>} while (0)</span>&nbsp;</td></tr><tr><th>1063</th><th>1063</th><td class="l"><span></span>&nbsp;</td></tr></tbody><tbody class="mod"><tr class="first"><th>1064</th><th>&nbsp;</th><td class="l">static NODE *ruby_cref = 0;&nbsp;</td></tr><tr><th>1065</th><th>&nbsp;</th><td class="l">static NODE *top_cref;&nbsp;</td></tr><tr><th>&nbsp;</th><th>1064</th><td class="r">NODE *ruby_cref = 0;&nbsp;</td></tr><tr class="last"><th>&nbsp;</th><th>1065</th><td class="r">NODE *top_cref;&nbsp;</td></tr></tbody><tbody><tr><th>1066</th><th>1066</th><td class="l"><span>#define PUSH_CREF(c) ruby_cref = NEW_NODE(NODE_CREF,(c),0,ruby_cref)</span>&nbsp;</td></tr><tr><th>1067</th><th>1067</th><td class="l"><span>#define POP_CREF() ruby_cref = ruby_cref-&gt;nd_next</span>&nbsp;</td></tr><tr><th>1068</th><th>1068</th><td class="l"><span></span>&nbsp;</td></tr></tbody>
+  </table>
+ </li><li class="entry">
+  <h2>ruby-1.8.5/node.h</h2>
+  <table class="inline" summary="Differences" cellspacing="0">
+   <colgroup><col class="lineno" /><col class="lineno" /><col class="content" /></colgroup>
+   <thead><tr>
+    <th>old</th>
+    <th>new</th>
+    <th>&nbsp;</th>
+   </tr></thead><tbody><tr><th>151</th><th>151</th><td class="l"><span>&nbsp; &nbsp; } u3;</span>&nbsp;</td></tr><tr><th>152</th><th>152</th><td class="l"><span>} NODE;</span>&nbsp;</td></tr><tr><th>153</th><th>153</th><td class="l"><span></span>&nbsp;</td></tr></tbody><tbody class="add"><tr class="first"><th>&nbsp;</th><th>154</th><td class="r"><ins>extern NODE *ruby_cref;</ins>&nbsp;</td></tr><tr><th>&nbsp;</th><th>155</th><td class="r"><ins>extern NODE *top_cref;</ins>&nbsp;</td></tr><tr class="last"><th>&nbsp;</th><th>156</th><td class="r"><ins></ins>&nbsp;</td></tr></tbody><tbody><tr><th>154</th><th>157</th><td class="l"><span>#define RNODE(obj)&nbsp; (R_CAST(RNode)(obj))</span>&nbsp;</td></tr><tr><th>155</th><th>158</th><td class="l"><span></span>&nbsp;</td></tr><tr><th>156</th><th>159</th><td class="l"><span>#define nd_type(n) ((int)(((RNODE(n))-&gt;flags&gt;&gt;FL_USHIFT)&amp;0xff))</span>&nbsp;</td></tr></tbody>
+  </table>
+ </li>
+</ul></div>
+
+ </div>
+ 
+
+
+</div>
+<div id="metanav" class="nav"><ul><li class="first"><a href="/sandbox/login">Login</a></li><li><a href="/sandbox/settings">Settings</a></li><li><a accesskey="6" href="/sandbox/wiki/TracGuide">Help/Guide</a></li><li class="last"><a href="/sandbox/about">About Trac</a></li></ul></div>
+</div>
+
+<script type="text/javascript">searchHighlight()</script>
+<div id="altlinks"><h3>Download in other formats:</h3><ul><li class="first last"><a href="/sandbox/attachment/wiki/InstallingTheSandbox/ruby-1.8.5-crefs_exposed.patch?format=raw">Original Format</a></li></ul></div>
+
+<div id="footer">
+ <hr />
+ <a id="tracpowered" href="http://trac.edgewall.com/"><img src="/sandbox/chrome/common/trac_logo_mini.png" height="30" width="107"
+   alt="Trac Powered"/></a>
+ <p class="left">
+  Powered by <a href="/sandbox/about"><strong>Trac 0.10dev</strong></a><br />
+  By <a href="http://www.edgewall.com/">Edgewall Software</a>.
+ </p>
+ <p class="right">
+  Visit the Trac open source project at<br /><a href="http://trac.edgewall.org/">http://trac.edgewall.org/</a>
+ </p>
+</div>
+
+
+
+ </body>
+</html>
+

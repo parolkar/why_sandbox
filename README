@@ -10,6 +10,27 @@ _______________________________________________________________________________
 _______________________________________________________________________________
 -------------------------------------------------------------------------------
 
+ INSTALLING THE FREAKY FREAKY SANDBOX.
+_______________________________________________________________________________
+
+ To run the freaky freaky sandbox, you need a patched Ruby 1.8.5 and the sandbox
+ extension.
+
+ The patch is a really, really tiny patch, and won't affect anything in the least.
+ It's in the patch/ directory of this release.
+
+  $ cd ruby-1.8.5
+  $ patch -p1 < ruby-1.8.5-crefs_exposed.patch
+  $ make
+  # make install
+
+ Once Ruby is patched, come back to this directory and install the extension.
+
+  # ruby setup.rb
+
+_______________________________________________________________________________
+-------------------------------------------------------------------------------
+
  RUNNING TRUSTED CODE.
 _______________________________________________________________________________
 
