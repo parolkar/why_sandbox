@@ -122,6 +122,7 @@ typedef struct SANDKIT {
   VALUE dln_librefs;
   st_table *loading_tbl;
 
+  NODE *top_cref;
   struct SCOPE *scope;
   struct SANDKIT *banished;
   int active;
@@ -132,6 +133,7 @@ typedef struct SANDKIT {
 #define SAND_COPY_S(K, M) sandbox_copy_method(sandbox_singleton_class(kit, kit->K), rb_intern(M), rb_singleton_class(rb_##K));
 #define SAND_COPY_MAIN(M) sandbox_copy_method(sandbox_singleton_class(kit, kit->oMain), rb_intern(M), rb_singleton_class(ruby_top_self));
 #define SAND_COPY_CONST(K, M) rb_const_set(kit->K, rb_intern(M), rb_const_get(rb_##K, rb_intern(M)));
+#define SAND_DUP_CONST(K, M) rb_const_set(kit->K, rb_intern(M), sandbox_dup_into(kit, rb_const_get(rb_##K, rb_intern(M))));
 #define SAND_COPY_IF_CONST(K, M) if (rb_const_defined(rb_##K, rb_intern(M))) { SAND_COPY_CONST(K, M) }
 #define SAND_COPY_KERNEL(M) SAND_COPY(mKernel, M); SAND_COPY_S(mKernel, M)
 #define SAND_UNDEF(M, K) rb_undef_method(sandbox_singleton_class(kit, kit->M), K);

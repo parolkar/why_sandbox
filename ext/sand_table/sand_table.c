@@ -97,6 +97,7 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->load_path);
   rb_gc_mark_maybe(kit->loaded_features);
   rb_gc_mark((VALUE)kit->scope);
+  rb_gc_mark((VALUE)kit->top_cref);
 #ifdef FFSAFE
   if (kit->globals != NULL)
     sandbox_mark_globals(kit->globals);
@@ -140,6 +141,7 @@ sandbox_alloc(class)
   _scope->local_vars = 0;
   _scope->flags = 0;
   kit->scope = _scope;
+  kit->top_cref = rb_node_newnode(NODE_CREF,kit->cObject,0,0);
 
   return Data_Wrap_Struct( class, mark_sandbox, free_sandbox, kit );
 }
@@ -289,6 +291,7 @@ sandbox_whoa_whoa_whoa(go)
   SWAP_OUT(mErrno);
   ruby_top_self = norm->oMain;
   ruby_scope = norm->scope;
+  top_cref = norm->top_cref;
 #ifdef FFSAFE
   rb_global_tbl = norm->globals;
   SWAP_OUT(cMatch);
@@ -390,6 +393,8 @@ sandbox_swap_in( kit )
   ruby_top_self = kit->oMain;
   norm->scope = ruby_scope;
   ruby_scope = kit->scope;
+  norm->top_cref = top_cref;
+  top_cref = kit->top_cref;
 #ifdef FFSAFE
   norm->globals = rb_global_tbl;
   rb_global_tbl = kit->globals;
@@ -506,12 +511,12 @@ sandbox_is_active( self )
 }
 
 VALUE
-sandbox_get_fatal( self )
+sandbox_get_main( self )
   VALUE self;
 {
   sandkit *kit;
   Data_Get_Struct( self, sandkit, kit );
-  return kit->eFatal;
+  return kit->oMain;
 }
 
 VALUE
@@ -2015,12 +2020,10 @@ Init_kit_io(kit)
   SAND_COPY_S(cFile, "split");
   SAND_COPY_S(cFile, "join");
 
-  /* FIXME: these strings all need to be dup'd into the sandbox.
   SAND_DUP_CONST(cFile, "Separator");
   SAND_DUP_CONST(cFile, "SEPARATOR");
   SAND_DUP_CONST(cFile, "ALT_SEPARATOR");
   SAND_DUP_CONST(cFile, "PATH_SEPARATOR");
-  */
 
   SAND_COPY(cIO, "stat"); /* this is IO's method */
   SAND_COPY(cFile, "lstat");
@@ -2161,6 +2164,8 @@ static void
 Init_kit_env(kit)
   sandkit *kit;
 {
+  rb_define_const(kit->cObject, "ENV", sandbox_dup_into(kit, 
+        rb_funcall(rb_const_get(rb_cObject, rb_intern("ENV")), rb_intern("to_hash"), 0)));
   SAND_COPY_KERNEL("syscall");
   SAND_COPY_KERNEL("open");
   SAND_COPY_KERNEL("printf");
@@ -2561,7 +2566,7 @@ void Init_sand_table()
   rb_define_method( cSandbox, "_eval", sandbox_eval, 1 );
   rb_define_method( cSandbox, "active?", sandbox_is_active, 0 );
   rb_define_method( cSandbox, "import", sandbox_import, 1 );
-  rb_define_method( cSandbox, "fatal", sandbox_get_fatal, 0 );
+  rb_define_method( cSandbox, "main", sandbox_get_main, 0 );
   rb_define_method( cSandbox, "finish", sandbox_finish, 0 );
 #ifdef FFSAFE
   rb_define_singleton_method( cSandbox, "safe", sandbox_safe, 0 );
