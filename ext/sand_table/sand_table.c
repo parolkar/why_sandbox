@@ -293,7 +293,7 @@ sandbox_whoa_whoa_whoa(go)
   SWAP_OUT(mErrno);
   ruby_top_self = norm->oMain;
   ruby_scope = norm->scope;
-  top_cref = norm->top_cref;
+  ruby_top_cref = norm->top_cref;
   ruby_cref = norm->ruby_cref;
 #ifdef FFSAFE
   rb_global_tbl = norm->globals;
@@ -396,8 +396,8 @@ sandbox_swap_in( kit )
   ruby_top_self = kit->oMain;
   norm->scope = ruby_scope;
   ruby_scope = kit->scope;
-  norm->top_cref = top_cref;
-  top_cref = kit->top_cref;
+  norm->top_cref = ruby_top_cref;
+  ruby_top_cref = kit->top_cref;
   norm->ruby_cref = ruby_cref;
   ruby_cref = kit->ruby_cref;
 #ifdef FFSAFE
@@ -1847,12 +1847,10 @@ Init_kit_load(kit)
 
   SAND_COPY_KERNEL("load");
   SAND_COPY_KERNEL("require");
-  /*
-  rb_define_method(rb_cModule, "autoload",  rb_mod_autoload,   2);
-  rb_define_method(rb_cModule, "autoload?", rb_mod_autoload_p, 1);
-  rb_define_global_function("autoload",  rb_f_autoload,   2);
-  rb_define_global_function("autoload?", rb_f_autoload_p, 1);
-  */
+  SAND_COPY(cModule, "autoload");
+  SAND_COPY(cModule, "autoload?");
+  SAND_COPY_KERNEL("autoload");
+  SAND_COPY_KERNEL("autoload?");
 
   /*
   rb_global_variable(&ruby_wrapper);
