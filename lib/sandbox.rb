@@ -3,6 +3,9 @@ require 'thread'
 
 class Sandbox
 
+  class TimeoutError < RuntimeError
+  end
+
   BUILD = "#{VERSION}.#{REV_ID[6..-3]}"
 
   def eval(str, opts = {})
@@ -11,7 +14,15 @@ class Sandbox
       begin
         th = Thread.start(str) { |code| $SAFE = 4; _eval(code) }
         th.join(opts[:timeout])
-        th.raise _eval("Exception") if th.alive?
+        if th.alive?
+          if th.respond_to? :kill!
+            th.kill!
+          else
+            th.kill
+          end
+          raise TimeoutError, "Sandbox#eval timed out"
+        end
+        th.value
       ensure
         finish
       end
