@@ -1,0 +1,152 @@
+Index: eval.c
+===================================================================
+RCS file: /src/ruby/eval.c,v
+retrieving revision 1.616.2.191
+diff -u -3 -r1.616.2.191 eval.c
+--- eval.c	31 Aug 2006 03:52:45 -0000	1.616.2.191
++++ eval.c	31 Aug 2006 21:45:16 -0000
+@@ -1437,6 +1437,8 @@
+ static int thread_set_raised();
+ static int thread_reset_raised();
+ 
++static int thread_no_ensure _((void));
++
+ static VALUE exception_error;
+ static VALUE sysstack_error;
+ 
+@@ -3307,7 +3309,7 @@
+ 	    result = rb_eval(self, node->nd_head);
+ 	}
+ 	POP_TAG();
+-	if (node->nd_ensr) {
++	if (node->nd_ensr && !thread_no_ensure()) {
+ 	    VALUE retval = prot_tag->retval; /* save retval */
+ 	    VALUE errinfo = ruby_errinfo;
+ 
+@@ -5453,7 +5455,9 @@
+     }
+     POP_TAG();
+     retval = prot_tag ? prot_tag->retval : Qnil;	/* save retval */
+-    (*e_proc)(data2);
++    if (!thread_no_ensure()) {
++        (*e_proc)(data2);
++    }
+     if (prot_tag) return_value(retval);
+     if (state) JUMP_TAG(state);
+     return result;
+@@ -9844,7 +9848,8 @@
+ 
+ #define THREAD_RAISED 0x200	 /* temporary flag */
+ #define THREAD_TERMINATING 0x400 /* persistent flag */
+-#define THREAD_FLAGS_MASK  0x400 /* mask for persistent flags */
++#define THREAD_NO_ENSURE 0x800   /* persistent flag */
++#define THREAD_FLAGS_MASK  0xc00 /* mask for persistent flags */
+ 
+ #define FOREACH_THREAD_FROM(f,x) x = f; do { x = x->next;
+ #define END_FOREACH_FROM(f,x) } while (x != f)
+@@ -9912,6 +9917,12 @@
+     return 1;
+ }
+ 
++static int
++thread_no_ensure()
++{
++    return ((curr_thread->flags & THREAD_NO_ENSURE) == THREAD_NO_ENSURE);
++}
++
+ static void rb_thread_ready _((rb_thread_t));
+ 
+ static VALUE run_trap_eval _((VALUE));
+@@ -11201,16 +11212,34 @@
+ }
+ 
+ 
++static void
++kill_thread(th, flags)
++    rb_thread_t th;
++    int flags;
++{
++    if (th != curr_thread && th->safe < 4) {
++	rb_secure(4);
++    }
++    if (th->status == THREAD_TO_KILL || th->status == THREAD_KILLED)
++	return;
++    if (th == th->next || th == main_thread) rb_exit(EXIT_SUCCESS);
++
++    rb_thread_ready(th);
++    th->flags |= flags;
++    th->status = THREAD_TO_KILL;
++    if (!rb_thread_critical) rb_thread_schedule();
++}
++
++
+ /*
+  *  call-seq:
+- *     thr.exit        => thr or nil
+- *     thr.kill        => thr or nil
+- *     thr.terminate   => thr or nil
+- *  
+- *  Terminates <i>thr</i> and schedules another thread to be run. If this thread
+- *  is already marked to be killed, <code>exit</code> returns the
+- *  <code>Thread</code>. If this is the main thread, or the last thread, exits
+- *  the process.
++ *     thr.exit        => thr
++ *     thr.kill        => thr
++ *     thr.terminate   => thr
++ *  
++ *  Terminates <i>thr</i> and schedules another thread to be run, returning
++ *  the terminated <code>Thread</code>.  If this is the main thread, or the
++ *  last thread, exits the process.
+  */
+ 
+ VALUE
+@@ -11218,17 +11247,30 @@
+     VALUE thread;
+ {
+     rb_thread_t th = rb_thread_check(thread);
++    kill_thread(th, 0);
++    return thread;
++}
+ 
+-    if (th != curr_thread && th->safe < 4) {
+-	rb_secure(4);
+-    }
+-    if (th->status == THREAD_TO_KILL || th->status == THREAD_KILLED)
+-	return thread;
+-    if (th == th->next || th == main_thread) rb_exit(EXIT_SUCCESS);
+ 
+-    rb_thread_ready(th);
+-    th->status = THREAD_TO_KILL;
+-    if (!rb_thread_critical) rb_thread_schedule();
++/*
++ *  call-seq:
++ *     thr.exit!        => thr
++ *     thr.kill!        => thr
++ *     thr.terminate!   => thr
++ *  
++ *  Terminates <i>thr</i> without calling ensure clauses and schedules
++ *  another thread to be run, returning the terminated <code>Thread</code>.
++ *  If this is the main thread, or the last thread, exits the process.
++ *
++ *  See <code>Thread#exit</code> for the safer version.
++ */
++
++static VALUE
++rb_thread_kill_bang(thread)
++    VALUE thread;
++{
++    rb_thread_t th = rb_thread_check(thread);
++    kill_thread(th, THREAD_NO_ENSURE);
+     return thread;
+ }
+ 
+@@ -12883,6 +12925,9 @@
+     rb_define_method(rb_cThread, "kill", rb_thread_kill, 0);
+     rb_define_method(rb_cThread, "terminate", rb_thread_kill, 0);
+     rb_define_method(rb_cThread, "exit", rb_thread_kill, 0);
++    rb_define_method(rb_cThread, "kill!", rb_thread_kill_bang, 0);
++    rb_define_method(rb_cThread, "terminate!", rb_thread_kill_bang, 0);
++    rb_define_method(rb_cThread, "exit!", rb_thread_kill_bang, 0);
+     rb_define_method(rb_cThread, "value", rb_thread_value, 0);
+     rb_define_method(rb_cThread, "status", rb_thread_status, 0);
+     rb_define_method(rb_cThread, "join", rb_thread_join_m, -1);
