@@ -3,7 +3,7 @@ require 'thread'
 
 class Sandbox
 
-  class TimeoutError < RuntimeError
+  class TimeoutError < Exception
   end
 
   BUILD = "#{VERSION}.#{REV_ID[6..-3]}"
