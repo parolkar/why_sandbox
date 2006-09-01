@@ -10,10 +10,14 @@ class Sandbox
 
   def eval(str, opts = {})
     opts = @options.merge(opts)
-    if opts[:timeout]
+    if opts[:timeout] or opts[:safelevel]
       timed_out = false
       begin
-        th = Thread.start(str) { |code| $SAFE = 4; _eval(code) }
+        safelevel = opts[:safelevel]
+        th = Thread.start(str) do |code|
+          $SAFE = safelevel if safelevel and safelevel > $SAFE
+          _eval(code)
+        end
         th.join(opts[:timeout])
         if th.alive?
           if th.respond_to? :kill!
