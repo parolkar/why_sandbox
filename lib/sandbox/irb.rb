@@ -44,7 +44,7 @@ class Sandbox::IRB
         begin
           val = box_eval(line)
           io.puts @prompt[:return] % [val.inspect]
-        rescue Sandbox::Exception => e
+        rescue Sandbox::Exception, Sandbox::TimeoutError => e
           io.print e, "\n"
         end
       end

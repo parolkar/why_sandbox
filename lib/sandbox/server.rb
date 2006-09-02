@@ -25,6 +25,10 @@ class Sandbox::IRBServer
     (1..20).map { abc[rand(abc.size),1] }.join
   end
 
+  def new_sandbox
+    Sandbox.safe(:timeout => 10)
+  end
+
   def process_client(client)
     begin
       case client.gets
@@ -34,7 +38,7 @@ class Sandbox::IRBServer
         sess = randid
       end
 
-      @sessions[sess] ||= Sandbox.new
+      @sessions[sess] ||= new_sandbox
       client.puts sess
       Sandbox::IRB.new(@sessions[sess]).start(client)
     rescue EOFError,Errno::ECONNRESET,Errno::EPIPE,Errno::EINVAL,Errno::EBADF

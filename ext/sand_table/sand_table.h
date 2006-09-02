@@ -119,6 +119,7 @@ typedef struct SANDKIT {
 
   NODE *top_cref;
   NODE *ruby_cref;
+  VALUE ruby_class;
   struct SCOPE *scope;
   struct SANDKIT *banished;
   int active;

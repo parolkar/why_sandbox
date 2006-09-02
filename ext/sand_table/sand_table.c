@@ -101,6 +101,7 @@ mark_sandbox(kit)
   rb_gc_mark((VALUE)kit->scope);
   rb_gc_mark((VALUE)kit->top_cref);
   rb_gc_mark((VALUE)kit->ruby_cref);
+  rb_gc_mark_maybe(kit->ruby_class);
   sandbox_mark_globals(kit->globals);
 }
 
@@ -141,6 +142,7 @@ sandbox_alloc(class)
   kit->scope = _scope;
   kit->top_cref = rb_node_newnode(NODE_CREF,kit->cObject,0,0);
   kit->ruby_cref = kit->top_cref;
+  kit->ruby_class = kit->cObject;
 
   return Data_Wrap_Struct( class, mark_sandbox, free_sandbox, kit );
 }
@@ -296,6 +298,7 @@ sandbox_whoa_whoa_whoa(go)
   ruby_scope = norm->scope;
   ruby_top_cref = norm->top_cref;
   ruby_cref = norm->ruby_cref;
+  ruby_class = norm->ruby_class;
   rb_global_tbl = norm->globals;
   SWAP_OUT(cMatch);
   SWAP_OUT(cMethod);
@@ -399,6 +402,8 @@ sandbox_swap_in( kit )
   ruby_top_cref = kit->top_cref;
   norm->ruby_cref = ruby_cref;
   ruby_cref = kit->ruby_cref;
+  norm->ruby_class = ruby_class;
+  ruby_class = kit->ruby_class;
   norm->globals = rb_global_tbl;
   rb_global_tbl = kit->globals;
   SWAP_IN(cMatch);
@@ -424,7 +429,6 @@ VALUE
 sandbox_main_eval(go)
   go_cart *go;
 {
-  // return rb_mod_module_eval(1, go->argv, go->kit->cObject);
   VALUE str = go->argv[0];
   StringValue(str);
   return rb_eval_string(RSTRING(str)->ptr);
