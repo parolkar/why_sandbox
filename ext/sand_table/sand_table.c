@@ -542,10 +542,20 @@ sandbox_dup_into( kit, obj )
 #ifdef FFSAFE
 static VALUE cSandboxSafe;
 
-VALUE sandbox_safe( klass )
-  VALUE klass;
+VALUE sandbox_safe( argc, argv, self )
+  int argc;
+  VALUE *argv;
+  VALUE self;
 {
-  return rb_funcall( cSandboxSafe, rb_intern("new"), 0 );
+  VALUE opts;
+  if (rb_scan_args(argc, argv, "01", &opts) == 0)
+  {
+    return rb_funcall( cSandboxSafe, rb_intern("new"), 0 );
+  }
+  else
+  {
+    return rb_funcall( cSandboxSafe, rb_intern("new"), 1, opts );
+  }
 }
 #endif
 
@@ -2576,7 +2586,7 @@ void Init_sand_table()
   rb_define_method( cSandbox, "main", sandbox_get_main, 0 );
   rb_define_method( cSandbox, "finish", sandbox_finish, 0 );
 #ifdef FFSAFE
-  rb_define_singleton_method( cSandbox, "safe", sandbox_safe, 0 );
+  rb_define_singleton_method( cSandbox, "safe", sandbox_safe, -1 );
   cSandboxSafe = rb_define_class_under(cSandbox, "Safe", cSandbox);
   rb_define_method( cSandboxSafe, "_eval", sandbox_safe_eval, 1 );
 #endif
