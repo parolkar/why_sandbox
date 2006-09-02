@@ -6,7 +6,7 @@ require 'test/unit'
 class TestTimeout < Test::Unit::TestCase
 
   def setup
-    @s = Sandbox.safe(:timeout => 2)
+    @s = Sandbox.safe(:timeout => 0.5)
   end
 
   def eval str
@@ -26,6 +26,12 @@ class TestTimeout < Test::Unit::TestCase
 
         endless[]
       }
+    end
+  end
+
+  def test_math_stalls
+    assert_raise Sandbox::TimeoutError do
+      eval %{99999999**999999999}
     end
   end
 
