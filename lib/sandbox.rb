@@ -3,10 +3,11 @@ require 'thread'
 
 class Sandbox
 
+  BUILD = "#{VERSION}.#{REV_ID[6..-3]}"
+  PRELUDE = File.expand_path("../sandbox/prelude.rb", __FILE__)
+
   class TimeoutError < Exception
   end
-
-  BUILD = "#{VERSION}.#{REV_ID[6..-3]}"
 
   def eval(str, opts = {})
     opts = @options.merge(opts)

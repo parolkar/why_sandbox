@@ -402,7 +402,6 @@ sandbox_import_class_path(kit, path)
   return c;
 } 
 
-#ifdef FFSAFE
 struct trace_var {
   int removed;
   void (*func)();
@@ -665,4 +664,3 @@ sandbox_errinfo_setter(val, id, var)
   }
   *var = val;
 }  
-#endif

@@ -25,12 +25,10 @@ extern st_table *rb_class_tbl;
 extern VALUE ruby_top_self;
 extern struct FRAME *ruby_frame;
 extern struct SCOPE *ruby_scope;
-
-#if RUBY_VERSION_CODE >= 185
-#define FFSAFE
 extern st_table *rb_global_tbl;
-#else
-#warning "** Sandbox will NOT be safe unless used with 1.8.5 -- Proceeding anyway! **"
+
+#if RUBY_VERSION_CODE <= 185
+#warning "** Sandbox will NOT compile without a patched 1.8.5 -- Proceeding anyway! **"
 #endif
 
 #if defined(__cplusplus)
@@ -39,11 +37,8 @@ extern "C" {
 
 typedef struct SANDKIT {
   st_table *tbl;
-
-#ifdef FFSAFE
   st_table *globals;
   VALUE _progname;
-#endif
 
   VALUE cObject;
   VALUE cModule;
@@ -155,14 +150,12 @@ VALUE sandbox_defmodule(sandkit *, const char *);
 void sandbox_copy_method(VALUE, VALUE, ID);
 void sandbox_foreach_method(VALUE, VALUE, int (*)(ID, long, VALUE *));
 VALUE sandbox_import_class_path(sandkit *, const char *);
-#ifdef FFSAFE
 void sandbox_define_hooked_variable(sandkit *kit, const char *, VALUE *, VALUE (*)(), void (*)());
 void sandbox_define_variable(sandkit *kit, const char *, VALUE *);
 void sandbox_define_readonly_variable(sandkit *, const char  *, VALUE *);
 void sandbox_define_virtual_variable(sandkit *, const char *, VALUE (*)(), void (*)());
 void sandbox_mark_globals(st_table *);
 void sandbox_errinfo_setter(VALUE val, ID id, VALUE *var);
-#endif
 
 #if defined(__cplusplus)
 }  /* extern "C" { */

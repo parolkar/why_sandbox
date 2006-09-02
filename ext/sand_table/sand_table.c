@@ -10,7 +10,8 @@
 
 #define SAND_REV_ID "$Rev$"
 
-static VALUE Qimport, Qinit, Qload, Qenv, Qio, Qreal, Qall, rb_eSandboxException;
+static VALUE Qimport, Qinit, Qload, Qenv, Qio, Qreal, Qall;
+static VALUE rb_cSandbox, rb_cSandboxSafe, rb_eSandboxException;
 static ID s_options;
 
 static void Init_kit _((sandkit *));
@@ -18,6 +19,7 @@ static void Init_kit_load _((sandkit *));
 static void Init_kit_io _((sandkit *));
 static void Init_kit_env _((sandkit *));
 static void Init_kit_real _((sandkit *));
+static void Init_kit_prelude _((sandkit *));
 
 static void
 mark_sandbox(kit)
@@ -99,10 +101,7 @@ mark_sandbox(kit)
   rb_gc_mark((VALUE)kit->scope);
   rb_gc_mark((VALUE)kit->top_cref);
   rb_gc_mark((VALUE)kit->ruby_cref);
-#ifdef FFSAFE
-  if (kit->globals != NULL)
-    sandbox_mark_globals(kit->globals);
-#endif
+  sandbox_mark_globals(kit->globals);
 }
 
 void
@@ -110,9 +109,7 @@ free_sandbox(kit)
   sandkit *kit;
 {   
   st_free_table(kit->tbl);
-#ifdef FFSAFE
   st_free_table(kit->globals);
-#endif
   MEMZERO(kit, sandkit, 1);
   free(kit);
 }
@@ -156,7 +153,9 @@ sandbox_initialize(argc, argv, self)
   VALUE *argv;
   VALUE self;
 {
+  sandkit *kit;
   VALUE opts, import, init;
+
   if (rb_scan_args(argc, argv, "01", &opts) == 0)
   {
     opts = rb_hash_new();
@@ -166,14 +165,14 @@ sandbox_initialize(argc, argv, self)
     Check_Type(opts, T_HASH);
   }
 
+  Data_Get_Struct( self, sandkit, kit );
+
   init = rb_hash_aref(opts, Qinit);
   if (!NIL_P(init))
   {
     int i;
     int init_load = 0, init_env = 0, init_io = 0, init_real = 0;
-    sandkit *kit;
     init = rb_Array(init);
-    Data_Get_Struct( self, sandkit, kit );
     for ( i = 0; i < RARRAY(init)->len; i++ )
     {
       VALUE mod = rb_ary_entry(init, i);
@@ -195,6 +194,8 @@ sandbox_initialize(argc, argv, self)
       }
     }
   }
+
+  Init_kit_prelude(kit);
 
   import = rb_hash_aref(opts, Qimport);
   if (!NIL_P(import))
@@ -295,7 +296,6 @@ sandbox_whoa_whoa_whoa(go)
   ruby_scope = norm->scope;
   ruby_top_cref = norm->top_cref;
   ruby_cref = norm->ruby_cref;
-#ifdef FFSAFE
   rb_global_tbl = norm->globals;
   SWAP_OUT(cMatch);
   SWAP_OUT(cMethod);
@@ -304,7 +304,6 @@ sandbox_whoa_whoa_whoa(go)
   SWAP_OUT(cNameErrorMesg);
   SWAP_OUT(eSysStackError);
   SWAP_OUT(eLocalJumpError);
-#endif
   SWAP_GVAR_OUT("$LOAD_PATH", load_path);
   SWAP_GVAR_OUT("$LOADED_FEATURES", loaded_features);
   go->kit->active = 0;
@@ -400,7 +399,6 @@ sandbox_swap_in( kit )
   ruby_top_cref = kit->top_cref;
   norm->ruby_cref = ruby_cref;
   ruby_cref = kit->ruby_cref;
-#ifdef FFSAFE
   norm->globals = rb_global_tbl;
   rb_global_tbl = kit->globals;
   SWAP_IN(cMatch);
@@ -410,7 +408,6 @@ sandbox_swap_in( kit )
   SWAP_IN(cNameErrorMesg);
   SWAP_IN(eSysStackError);
   SWAP_IN(eLocalJumpError);
-#endif
 
   kit->active = 1;
 
@@ -539,9 +536,6 @@ sandbox_dup_into( kit, obj )
   return sandobj;
 }
 
-#ifdef FFSAFE
-static VALUE cSandboxSafe;
-
 VALUE sandbox_safe( argc, argv, self )
   int argc;
   VALUE *argv;
@@ -550,14 +544,13 @@ VALUE sandbox_safe( argc, argv, self )
   VALUE opts;
   if (rb_scan_args(argc, argv, "01", &opts) == 0)
   {
-    return rb_funcall( cSandboxSafe, rb_intern("new"), 0 );
+    return rb_funcall( rb_cSandboxSafe, rb_intern("new"), 0 );
   }
   else
   {
-    return rb_funcall( cSandboxSafe, rb_intern("new"), 1, opts );
+    return rb_funcall( rb_cSandboxSafe, rb_intern("new"), 1, opts );
   }
 }
-#endif
 
 static void
 Init_kit(kit)
@@ -566,9 +559,7 @@ Init_kit(kit)
   VALUE metaclass;
 
   kit->tbl = st_init_numtable();
-#ifdef FFSAFE
   kit->globals = st_init_numtable();
-#endif
   kit->cObject = 0;
 
   kit->cObject = sandbox_bootclass(kit, "Object", 0);
@@ -996,9 +987,7 @@ Init_kit(kit)
   SAND_COPY(eNameError, "initialize");
   SAND_COPY(eNameError, "name");
   SAND_COPY(eNameError, "to_s");
-#ifndef FFSAFE
-  VALUE rb_cNameErrorMesg = rb_const_get_at(rb_eNameError, rb_intern("message"));
-#endif
+
   kit->cNameErrorMesg = sandbox_defclass_under(kit, kit->eNameError, "message", kit->cData);
   SAND_COPY(cNameErrorMesg, "to_str");
   SAND_COPY(cNameErrorMesg, "_dump");
@@ -1025,9 +1014,6 @@ Init_kit(kit)
   /*
   syserr_tbl = st_init_numtable();
   */
-#ifndef FFSAFE
-  VALUE rb_eSystemCallError = rb_const_get(rb_cObject, rb_intern("SystemCallError"));
-#endif
   kit->eSystemCallError = sandbox_defclass(kit, "SystemCallError", kit->eStandardError);
   SAND_COPY(eSystemCallError, "initialize");
   SAND_COPY(eSystemCallError, "errno");
@@ -1157,9 +1143,6 @@ Init_kit(kit)
   SAND_SYSERR(mErrno, "EREMOTEIO");
   SAND_SYSERR(mErrno, "EDQUOT");
 
-#ifndef FFSAFE
-  VALUE rb_eLocalJumpError = rb_const_get(rb_cObject, rb_intern("LocalJumpError"));
-#endif
   kit->eLocalJumpError = sandbox_defclass(kit, "LocalJumpError", kit->eStandardError);
   SAND_COPY(eLocalJumpError, "exit_value");
   SAND_COPY(eLocalJumpError, "reason");
@@ -1169,9 +1152,6 @@ Init_kit(kit)
   exception_error = rb_exc_new2(rb_eFatal, "exception reentered");
 */
 
-#ifndef FFSAFE
-  VALUE rb_eSysStackError = rb_const_get(rb_cObject, rb_intern("SystemStackError"));
-#endif
   kit->eSysStackError = sandbox_defclass(kit, "SystemStackError", kit->eStandardError);
 /*
   FIXME: 1.8.5 needs the sysstack_error and exception_error exposed. 
@@ -1200,9 +1180,6 @@ Init_kit(kit)
   SAND_COPY_KERNEL("proc");
   SAND_COPY_KERNEL("lambda");
 
-#ifndef FFSAFE
-  VALUE rb_cMethod= rb_const_get(rb_cObject, rb_intern("Method"));
-#endif
   kit->cMethod = sandbox_defclass(kit, "Method", kit->cObject);
   rb_undef_alloc_func(kit->cMethod);
   SAND_UNDEF(cMethod, "new");
@@ -1217,9 +1194,6 @@ Init_kit(kit)
   SAND_COPY(cMethod, "unbind");
   SAND_COPY(mKernel, "method");
 
-#ifndef FFSAFE
-  VALUE rb_cUnboundMethod = rb_const_get(rb_cObject, rb_intern("UnboundMethod"));
-#endif
   kit->cUnboundMethod = sandbox_defclass(kit, "UnboundMethod", kit->cObject);
   rb_undef_alloc_func(kit->cUnboundMethod);
   SAND_UNDEF(cUnboundMethod, "new");
@@ -1593,9 +1567,6 @@ Init_kit(kit)
 
   SAND_COPY(cStruct, "members");
 
-#ifndef FFSAFE
-  VALUE rb_eRegexpError = rb_const_get(rb_cObject, rb_intern("RegexpError"));
-#endif
   kit->eRegexpError = sandbox_defclass(kit, "RegexpError", kit->eStandardError);
 
   /*
@@ -1641,9 +1612,6 @@ Init_kit(kit)
   /* FIXME: what to do about the reg_cache? oh definitely swap. */
   /* rb_global_variable(&reg_cache); */
 
-#ifndef FFSAFE
-  VALUE rb_cMatch = rb_const_get(rb_cObject, rb_intern("MatchData"));
-#endif
   kit->cMatch  = sandbox_defclass(kit, "MatchData", kit->cObject);
   rb_const_set(kit->cObject, rb_intern("MatchingData"), kit->cMatch);
   SAND_COPY_ALLOC(cMatch);
@@ -1838,10 +1806,8 @@ Init_kit(kit)
    */
   kit->load_path = sandbox_dup_into(kit, rb_ary_new());
   kit->loaded_features = sandbox_dup_into(kit, rb_ary_new());
-#ifdef FFSAFE
   kit->_progname = sandbox_str(kit, "(sandbox)");
   sandbox_define_hooked_variable(kit, "$0", &kit->_progname, 0, 0);
-#endif
 }
 
 static void
@@ -2572,25 +2538,34 @@ Init_kit_real(kit)
   SAND_COPY_CONST(cObject, "PLATFORM");
 }
 
+static void
+Init_kit_prelude(kit)
+  sandkit *kit;
+{
+  VALUE prelude = rb_const_get(rb_cSandbox, rb_intern("PRELUDE"));
+  StringValue(prelude);
+  go_cart *go = sandbox_swap_in(kit);
+  rb_require(RSTRING(prelude)->ptr);
+  sandbox_whoa_whoa_whoa(go);
+}
+
 void Init_sand_table()
 {
-  VALUE cSandbox = rb_define_class("Sandbox", rb_cObject);
-  rb_define_const( cSandbox, "VERSION", rb_str_new2( SAND_VERSION ) );
-  rb_define_const( cSandbox, "REV_ID", rb_str_new2( SAND_REV_ID ) );
-  rb_define_alloc_func( cSandbox, sandbox_alloc );
-  rb_define_attr( cSandbox, "options", 1, 1 );
-  rb_define_method( cSandbox, "initialize", sandbox_initialize, -1 );
-  rb_define_method( cSandbox, "_eval", sandbox_eval, 1 );
-  rb_define_method( cSandbox, "active?", sandbox_is_active, 0 );
-  rb_define_method( cSandbox, "import", sandbox_import, 1 );
-  rb_define_method( cSandbox, "main", sandbox_get_main, 0 );
-  rb_define_method( cSandbox, "finish", sandbox_finish, 0 );
-#ifdef FFSAFE
-  rb_define_singleton_method( cSandbox, "safe", sandbox_safe, -1 );
-  cSandboxSafe = rb_define_class_under(cSandbox, "Safe", cSandbox);
-  rb_define_method( cSandboxSafe, "_eval", sandbox_safe_eval, 1 );
-#endif
-  rb_eSandboxException = rb_define_class_under(cSandbox, "Exception", rb_eException);
+  rb_cSandbox = rb_define_class("Sandbox", rb_cObject);
+  rb_define_const( rb_cSandbox, "VERSION", rb_str_new2( SAND_VERSION ) );
+  rb_define_const( rb_cSandbox, "REV_ID", rb_str_new2( SAND_REV_ID ) );
+  rb_define_alloc_func( rb_cSandbox, sandbox_alloc );
+  rb_define_attr( rb_cSandbox, "options", 1, 1 );
+  rb_define_method( rb_cSandbox, "initialize", sandbox_initialize, -1 );
+  rb_define_method( rb_cSandbox, "_eval", sandbox_eval, 1 );
+  rb_define_method( rb_cSandbox, "active?", sandbox_is_active, 0 );
+  rb_define_method( rb_cSandbox, "import", sandbox_import, 1 );
+  rb_define_method( rb_cSandbox, "main", sandbox_get_main, 0 );
+  rb_define_method( rb_cSandbox, "finish", sandbox_finish, 0 );
+  rb_define_singleton_method( rb_cSandbox, "safe", sandbox_safe, -1 );
+  rb_cSandboxSafe = rb_define_class_under(rb_cSandbox, "Safe", rb_cSandbox);
+  rb_define_method( rb_cSandboxSafe, "_eval", sandbox_safe_eval, 1 );
+  rb_eSandboxException = rb_define_class_under(rb_cSandbox, "Exception", rb_eException);
 
   s_options = rb_intern("@options");
   Qinit = ID2SYM(rb_intern("init"));
