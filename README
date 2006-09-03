@@ -16,11 +16,13 @@ _______________________________________________________________________________
  To run the freaky freaky sandbox, you need a patched Ruby 1.8.5 and the sandbox
  extension.
 
- The patch is a really, really tiny patch, and won't affect anything in the least.
- It's in the patch/ directory of this release.
+ There are two patches, one which let's us swap out the `main` object.  And
+ another which adds a Thread#kill! for stopping unending sandboxes.  They are
+ both in the patch/ directory of this release.
 
   $ cd ruby-1.8.5
   $ patch -p1 < ruby-1.8.5-crefs_exposed.patch
+  $ patch -p1 < ruby-1.8.5-thread_kill_bang.patch
   $ make
   # make install
 
