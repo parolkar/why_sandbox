@@ -38,6 +38,7 @@ extern "C" {
 typedef struct SANDKIT {
   st_table *tbl;
   st_table *globals;
+  VALUE self;
   VALUE _progname;
 
   VALUE cObject;
@@ -49,6 +50,7 @@ typedef struct SANDKIT {
   VALUE cBignum;
   VALUE cBinding;
   VALUE mComparable;
+  VALUE cCont;
   VALUE cData;
   VALUE cDir;
   VALUE mEnumerable;
@@ -78,6 +80,8 @@ typedef struct SANDKIT {
   VALUE cString;
   VALUE cStruct;
   VALUE cSymbol;
+  VALUE cThread;
+  VALUE cThGroup;
   VALUE cTime;
   VALUE cTrueClass;
   VALUE cUnboundMethod;
@@ -96,6 +100,7 @@ typedef struct SANDKIT {
   VALUE eSecurityError;
   VALUE eSystemCallError;
   VALUE eSysStackError;
+  VALUE eThreadError;
   VALUE eTypeError;
   VALUE eZeroDivError;
   VALUE eNotImpError;
