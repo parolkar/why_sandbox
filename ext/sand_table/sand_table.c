@@ -118,15 +118,7 @@ static VALUE
 sandbox_save(thread)
   rb_thread_t thread;
 {
-  if (!NIL_P(ruby_sandbox))
-  {
-    sandkit *kit;
-    Data_Get_Struct( ruby_sandbox, sandkit, kit );
-    if (kit->active == 1)
-    {
-      thread->sandbox = ruby_sandbox;
-    }
-  }
+  return Qnil;
 }
 
 static VALUE
@@ -137,12 +129,9 @@ sandbox_restore(thread)
   {
     sandkit *kit;
     Data_Get_Struct( thread->sandbox, sandkit, kit );
-    if (kit->active == 1)
-    {
-      sandbox_swap_in(kit);
-      thread->sandbox = Qnil;
-    }
+    sandbox_swap_in(kit);
   }
+  return Qnil;
 }
 
 void
@@ -446,6 +435,9 @@ sandbox_whoa_whoa_whoa(go)
 {
   VALUE exc = go->exception;
   sandbox_swap_out(go->kit);
+  curr_thread->sandbox = Qnil;
+  curr_thread->sandbox_restore = NULL;
+  curr_thread->sandbox_save = NULL;
 
   go->kit->active = 0;
   go->kit->banished = NULL;
@@ -470,6 +462,7 @@ sandbox_begin( kit )
 
   curr_thread->sandbox_save = sandbox_save;
   curr_thread->sandbox_restore = sandbox_restore;
+  curr_thread->sandbox = kit->self;
 
   go = ALLOC(go_cart);
   go->exception = Qnil;
