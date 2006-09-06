@@ -118,6 +118,7 @@ static VALUE
 sandbox_save(thread)
   rb_thread_t thread;
 {
+  /* printf("SAVE: %lu, %lu -> %lu\n", thread, thread->sandbox, ruby_sandbox); */
   return Qnil;
 }
 
@@ -125,11 +126,19 @@ static VALUE
 sandbox_restore(thread)
   rb_thread_t thread;
 {
-  if (!NIL_P(thread->sandbox))
+  /* printf("RESTORE: %lu, %lu -> %lu\n", thread, thread->sandbox, ruby_sandbox); */
+  if (ruby_sandbox != thread->sandbox)
   {
     sandkit *kit;
-    Data_Get_Struct( thread->sandbox, sandkit, kit );
-    sandbox_swap_in(kit);
+    if (NIL_P(thread->sandbox) && !NIL_P(ruby_sandbox))
+    {
+      sandbox_swap_in(&real);
+    }
+    else if (!NIL_P(thread->sandbox))
+    {
+      Data_Get_Struct( thread->sandbox, sandkit, kit );
+      sandbox_swap_in(kit);
+    }
   }
   return Qnil;
 }
@@ -436,8 +445,6 @@ sandbox_whoa_whoa_whoa(go)
   VALUE exc = go->exception;
   sandbox_swap_out(go->kit);
   curr_thread->sandbox = Qnil;
-  curr_thread->sandbox_restore = NULL;
-  curr_thread->sandbox_save = NULL;
 
   go->kit->active = 0;
   go->kit->banished = NULL;
@@ -460,8 +467,6 @@ sandbox_begin( kit )
   sandbox_swap_in(kit);
   kit->active = 1;
 
-  curr_thread->sandbox_save = sandbox_save;
-  curr_thread->sandbox_restore = sandbox_restore;
   curr_thread->sandbox = kit->self;
 
   go = ALLOC(go_cart);
@@ -2669,7 +2674,7 @@ Init_kit_prelude(kit)
   VALUE prelude = rb_const_get(rb_cSandbox, rb_intern("PRELUDE"));
   StringValue(prelude);
   go_cart *go = sandbox_begin(kit);
-  rb_require(RSTRING(prelude)->ptr);
+  rb_load(prelude, 0);
   sandbox_whoa_whoa_whoa(go);
 }
 
@@ -2763,6 +2768,10 @@ void Init_sand_table()
   real.scope = ruby_scope;
   real.banished = NULL;
   real.active = 1;
+
+  /* FIXME: all threads should run through sandbox_save. */
+  curr_thread->sandbox_save = sandbox_save;
+  curr_thread->sandbox_restore = sandbox_restore;
 
   rb_cSandbox = rb_define_class("Sandbox", rb_cObject);
   rb_define_const( rb_cSandbox, "VERSION", rb_str_new2( SAND_VERSION ) );
