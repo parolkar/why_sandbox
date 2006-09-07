@@ -1,6 +1,6 @@
-diff -wur ruby-1.8.5/eval.c ruby-1.8.5-top_cref_exposed/eval.c
---- ruby-1.8.5/eval.c	Mon Sep  4 17:03:08 2006
-+++ ruby-1.8.5-top_cref_exposed/eval.c	Mon Sep  4 23:53:44 2006
+diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox_needs/eval.c
+--- ruby-1.8.5/eval.c	2006-08-06 21:43:39.000000000 -0800
++++ ruby-1.8.5-sandbox_needs/eval.c	2006-09-07 02:44:58.000000000 -0800
 @@ -29,11 +29,6 @@
  #endif
  
@@ -229,17 +229,17 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-top_cref_exposed/eval.c
  }
  
  static int
-@@ -10352,6 +10291,10 @@
-     ruby_safe_level = th->safe;
+@@ -10336,6 +10275,10 @@
+ #endif
  
-     ruby_current_node = th->node;
+     rb_trap_immediate = 0;	/* inhibit interrupts from here */
 +    if (th->sandbox_restore != NULL)
 +    {
 +      th->sandbox_restore(th);
 +    }
- 
- #ifdef SAVE_WIN32_EXCEPTION_LIST
-     win32_set_exception_list(th->win32_exception_list);
+     ruby_frame = th->frame;
+     ruby_scope = th->scope;
+     ruby_class = th->klass;
 @@ -11201,16 +11144,34 @@
  }
  
@@ -349,9 +349,9 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-top_cref_exposed/eval.c
      rb_define_method(rb_cThread, "value", rb_thread_value, 0);
      rb_define_method(rb_cThread, "status", rb_thread_status, 0);
      rb_define_method(rb_cThread, "join", rb_thread_join_m, -1);
-diff -wur ruby-1.8.5/node.h ruby-1.8.5-top_cref_exposed/node.h
---- ruby-1.8.5/node.h	Mon Feb 13 02:10:53 2006
-+++ ruby-1.8.5-top_cref_exposed/node.h	Mon Sep  4 23:53:29 2006
+diff -wur ruby-1.8.5/node.h ruby-1.8.5-sandbox_needs/node.h
+--- ruby-1.8.5/node.h	2006-02-13 02:10:53.000000000 -0900
++++ ruby-1.8.5-sandbox_needs/node.h	2006-09-07 02:31:25.000000000 -0800
 @@ -151,6 +151,9 @@
      } u3;
  } NODE;
@@ -362,11 +362,10 @@ diff -wur ruby-1.8.5/node.h ruby-1.8.5-top_cref_exposed/node.h
  #define RNODE(obj)  (R_CAST(RNode)(obj))
  
  #define nd_type(n) ((int)(((RNODE(n))->flags>>FL_USHIFT)&0xff))
-@@ -370,6 +373,97 @@
- typedef void (*rb_event_hook_func_t) _((rb_event_t,NODE*,VALUE,ID,VALUE));
+@@ -371,6 +374,97 @@
  void rb_add_event_hook _((rb_event_hook_func_t,rb_event_t));
  int rb_remove_event_hook _((rb_event_hook_func_t));
-+
+ 
 +#if defined(HAVE_GETCONTEXT) && defined(HAVE_SETCONTEXT)
 +#include <ucontext.h>
 +#define USE_CONTEXT
@@ -457,12 +456,13 @@ diff -wur ruby-1.8.5/node.h ruby-1.8.5-top_cref_exposed/node.h
 +
 +extern rb_thread_t curr_thread;
 +extern rb_thread_t main_thread;
- 
++
  #if defined(__cplusplus)
  }  /* extern "C" { */
-diff -wur ruby-1.8.5/ruby.h ruby-1.8.5-top_cref_exposed/ruby.h
---- ruby-1.8.5/ruby.h	Sun Aug  6 21:43:42 2006
-+++ ruby-1.8.5-top_cref_exposed/ruby.h	Mon Sep  4 17:03:49 2006
+ #endif
+diff -wur ruby-1.8.5/ruby.h ruby-1.8.5-sandbox_needs/ruby.h
+--- ruby-1.8.5/ruby.h	2006-08-06 21:43:42.000000000 -0800
++++ ruby-1.8.5-sandbox_needs/ruby.h	2006-09-07 02:31:25.000000000 -0800
 @@ -626,6 +626,7 @@
  RUBY_EXTERN VALUE rb_eRuntimeError;
  RUBY_EXTERN VALUE rb_eSecurityError;
