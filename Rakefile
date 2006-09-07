@@ -49,9 +49,10 @@ spec =
         s.email = 'why@ruby-lang.org'
         s.homepage = 'http://code.whytheluckystiff.net/sandbox/'
 
-        s.files = %w(COPYING README Rakefile) +
+        s.files = %w(COPYING README Rakefile setup.rb) +
           Dir.glob("{bin,doc,test,lib,extras}/**/*") + 
-          Dir.glob("ext/**/*.{h,c,rb}")
+          Dir.glob("ext/**/extconf.rb") +
+          Dir.glob("ext/**/*.{h,c}")
         
         s.required_ruby_version = '>= 1.8.5'
         s.require_path = "lib"
