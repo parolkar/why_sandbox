@@ -23,8 +23,10 @@ static void Init_kit_io _((sandkit *));
 static void Init_kit_env _((sandkit *));
 static void Init_kit_real _((sandkit *));
 static void Init_kit_prelude _((sandkit *));
-void sandbox_swap_out(sandkit *kit);
-void sandbox_swap_in(sandkit *kit);
+void sandbox_swap(sandkit *kit, int mode);
+
+#define SANDBOX_STORE 1
+#define SANDBOX_REPLACE 2
 
 static void
 mark_sandbox(kit)
@@ -118,7 +120,7 @@ static VALUE
 sandbox_save(thread)
   rb_thread_t thread;
 {
-  /* printf("SAVE: %lu, %lu -> %lu\n", thread, thread->sandbox, ruby_sandbox); */
+  /* printf("KIT SAVE: %lu, %lu -> %lu\n", thread, thread->sandbox, ruby_sandbox); */
   return Qnil;
 }
 
@@ -126,18 +128,18 @@ static VALUE
 sandbox_restore(thread)
   rb_thread_t thread;
 {
-  /* printf("RESTORE: %lu, %lu -> %lu\n", thread, thread->sandbox, ruby_sandbox); */
   if (ruby_sandbox != thread->sandbox)
   {
+    /* printf("KIT RESTORE: %lu, %lu -> %lu\n", thread, thread->sandbox, ruby_sandbox); */
     sandkit *kit;
     if (NIL_P(thread->sandbox) && !NIL_P(ruby_sandbox))
     {
-      sandbox_swap_in(&real);
+      sandbox_swap(&real, SANDBOX_REPLACE);
     }
     else if (!NIL_P(thread->sandbox))
     {
       Data_Get_Struct( thread->sandbox, sandkit, kit );
-      sandbox_swap_in(kit);
+      sandbox_swap(kit, SANDBOX_REPLACE);
     }
   }
   return Qnil;
@@ -260,182 +262,99 @@ typedef struct {
   sandkit *kit;
 } go_cart;
 
-#define SWAP_OUT(N) if (kit->N != 0) { rb_##N = real.N; }
-#define SWAP_IN(N) if (kit->N != 0) { rb_##N = kit->N; }
-#define SWAP_GVAR_OUT(N, V) if (kit->V != 0) { rb_swap_global(N, real.V); }
-#define SWAP_GVAR_IN(N, V) if (kit->V != 0) { rb_swap_global(N, kit->V); }
+#define SWAP(N) \
+  if (mode == SANDBOX_STORE) kit->N = rb_##N; \
+  else if (kit->N != 0)      rb_##N = kit->N;
+#define SWAP_VAR(N, V) \
+  if (mode == SANDBOX_STORE) kit->V = N; \
+  else                       N = kit->V;
+#define SWAP_GVAR(N, V) \
+  if (mode == SANDBOX_STORE) kit->V = rb_gv_get(N); \
+  else                       sandbox_swap_global(&real, N, kit->V);
 
 void
-sandbox_swap_in(kit)
+sandbox_swap(kit, mode)
   sandkit *kit;
+  int mode;
 {
-  rb_class_tbl = kit->tbl;
-  SWAP_IN(cObject);
-  SWAP_IN(cModule);
-  SWAP_IN(cClass);
-  SWAP_IN(mKernel);
-  SWAP_IN(cArray);
-  SWAP_IN(cBignum);
-  SWAP_IN(cBinding);
-  SWAP_IN(mComparable);
-  SWAP_IN(cCont);
-  SWAP_IN(cData);
-  SWAP_IN(cDir);
-  SWAP_IN(mEnumerable);
-  SWAP_IN(cFalseClass);
-  SWAP_IN(cFile);
-  SWAP_IN(mFileTest);
-  SWAP_IN(cFixnum);
-  SWAP_IN(cFloat);
-  SWAP_IN(mGC);
-  SWAP_IN(cHash);
-  SWAP_IN(cInteger);
-  SWAP_IN(cIO);
-  SWAP_IN(mMath);
-  SWAP_IN(cNilClass);
-  SWAP_IN(cNumeric);
-  SWAP_IN(mPrecision);
-  SWAP_IN(cProc);
-  SWAP_IN(cRange);
-  SWAP_IN(cRegexp);
-  SWAP_IN(cStat);
-  SWAP_IN(cString);
-  SWAP_IN(cStruct);
-  SWAP_IN(cSymbol);
-  SWAP_IN(cThread);
-  SWAP_IN(cTime);
-  SWAP_IN(cTrueClass);
-  SWAP_IN(eException);
-  SWAP_IN(eStandardError);
-  SWAP_IN(eSystemExit);
-  SWAP_IN(eInterrupt);
-  SWAP_IN(eSignal);
-  SWAP_IN(eFatal);
-  SWAP_IN(eArgError);
-  SWAP_IN(eEOFError);
-  SWAP_IN(eIndexError);
-  SWAP_IN(eRangeError);
-  SWAP_IN(eIOError);
-  SWAP_IN(eRuntimeError);
-  SWAP_IN(eSecurityError);
-  SWAP_IN(eSystemCallError);
-  SWAP_IN(eThreadError);
-  SWAP_IN(eTypeError);
-  SWAP_IN(eZeroDivError);
-  SWAP_IN(eNotImpError);
-  SWAP_IN(eNoMemError);
-  SWAP_IN(eNoMethodError);
-  SWAP_IN(eFloatDomainError);
-  SWAP_IN(eScriptError);
-  SWAP_IN(eNameError);
-  SWAP_IN(eSyntaxError);
-  SWAP_IN(eLoadError);
-  SWAP_IN(mErrno);
-  SWAP_GVAR_IN("$LOAD_PATH", load_path);
-  SWAP_GVAR_IN("$LOADED_FEATURES", loaded_features);
-  ruby_sandbox = kit->self;
-  ruby_top_self = kit->oMain;
-  real.scope = ruby_scope;
-  ruby_scope = kit->scope;
-  real.top_cref = ruby_top_cref;
-  ruby_top_cref = kit->top_cref;
-  real.ruby_cref = ruby_cref;
-  ruby_cref = kit->ruby_cref;
-  real.ruby_class = ruby_class;
-  ruby_class = kit->ruby_class;
-  rb_global_tbl = kit->globals;
-  SWAP_IN(cMatch);
-  SWAP_IN(cMethod);
-  SWAP_IN(cUnboundMethod);
-  SWAP_IN(eRegexpError);
-  SWAP_IN(cNameErrorMesg);
-  SWAP_IN(eSysStackError);
-  SWAP_IN(eLocalJumpError);
-}
-
-void
-sandbox_swap_out(kit)
-  sandkit *kit;
-{
-  /* okay, move it all back */
-  rb_class_tbl = real.tbl;
-  SWAP_OUT(cObject);
-  SWAP_OUT(cModule);
-  SWAP_OUT(cClass);
-  SWAP_OUT(mKernel);
-  SWAP_OUT(cArray);
-  SWAP_OUT(cBignum);
-  SWAP_OUT(cBinding);
-  SWAP_OUT(mComparable);
-  SWAP_OUT(cCont);
-  SWAP_OUT(cData);
-  SWAP_OUT(cDir);
-  SWAP_OUT(mEnumerable);
-  SWAP_OUT(cFalseClass);
-  SWAP_OUT(cFile);
-  SWAP_OUT(mFileTest);
-  SWAP_OUT(cFixnum);
-  SWAP_OUT(cFloat);
-  SWAP_OUT(mGC);
-  SWAP_OUT(cHash);
-  SWAP_OUT(cInteger);
-  SWAP_OUT(cIO);
-  SWAP_OUT(mMath);
-  SWAP_OUT(cNilClass);
-  SWAP_OUT(cNumeric);
-  SWAP_OUT(mPrecision);
-  SWAP_OUT(cProc);
-  SWAP_OUT(cRange);
-  SWAP_OUT(cRegexp);
-  SWAP_OUT(cStat);
-  SWAP_OUT(cString);
-  SWAP_OUT(cStruct);
-  SWAP_OUT(cSymbol);
-  SWAP_OUT(cThread);
-  SWAP_OUT(cTime);
-  SWAP_OUT(cTrueClass);
-  SWAP_OUT(eException);
-  SWAP_OUT(eStandardError);
-  SWAP_OUT(eSystemExit);
-  SWAP_OUT(eInterrupt);
-  SWAP_OUT(eSignal);
-  SWAP_OUT(eFatal);
-  SWAP_OUT(eArgError);
-  SWAP_OUT(eEOFError);
-  SWAP_OUT(eIndexError);
-  SWAP_OUT(eRangeError);
-  SWAP_OUT(eIOError);
-  SWAP_OUT(eRuntimeError);
-  SWAP_OUT(eSecurityError);
-  SWAP_OUT(eSystemCallError);
-  SWAP_OUT(eThreadError);
-  SWAP_OUT(eTypeError);
-  SWAP_OUT(eZeroDivError);
-  SWAP_OUT(eNotImpError);
-  SWAP_OUT(eNoMemError);
-  SWAP_OUT(eNoMethodError);
-  SWAP_OUT(eFloatDomainError);
-  SWAP_OUT(eScriptError);
-  SWAP_OUT(eNameError);
-  SWAP_OUT(eSyntaxError);
-  SWAP_OUT(eLoadError);
-  SWAP_OUT(mErrno);
-  ruby_sandbox = real.self;
-  ruby_top_self = real.oMain;
-  ruby_scope = real.scope;
-  ruby_top_cref = real.top_cref;
-  ruby_cref = real.ruby_cref;
-  ruby_class = real.ruby_class;
-  rb_global_tbl = real.globals;
-  SWAP_OUT(cMatch);
-  SWAP_OUT(cMethod);
-  SWAP_OUT(cUnboundMethod);
-  SWAP_OUT(eRegexpError);
-  SWAP_OUT(cNameErrorMesg);
-  SWAP_OUT(eSysStackError);
-  SWAP_OUT(eLocalJumpError);
-  SWAP_GVAR_OUT("$LOAD_PATH", load_path);
-  SWAP_GVAR_OUT("$LOADED_FEATURES", loaded_features);
+  SWAP_VAR(ruby_sandbox, self);
+  SWAP_VAR(rb_class_tbl, tbl);
+  SWAP(cObject);
+  SWAP(cModule);
+  SWAP(cClass);
+  SWAP(mKernel);
+  SWAP(cArray);
+  SWAP(cBignum);
+  SWAP(cBinding);
+  SWAP(mComparable);
+  SWAP(cCont);
+  SWAP(cData);
+  SWAP(cDir);
+  SWAP(mEnumerable);
+  SWAP(cFalseClass);
+  SWAP(cFile);
+  SWAP(mFileTest);
+  SWAP(cFixnum);
+  SWAP(cFloat);
+  SWAP(mGC);
+  SWAP(cHash);
+  SWAP(cInteger);
+  SWAP(cIO);
+  SWAP(mMath);
+  SWAP(cNilClass);
+  SWAP(cNumeric);
+  SWAP(mPrecision);
+  SWAP(cProc);
+  SWAP(cRange);
+  SWAP(cRegexp);
+  SWAP(cStat);
+  SWAP(cString);
+  SWAP(cStruct);
+  SWAP(cSymbol);
+  SWAP(cThread);
+  SWAP(cTime);
+  SWAP(cTrueClass);
+  SWAP(eException);
+  SWAP(eStandardError);
+  SWAP(eSystemExit);
+  SWAP(eInterrupt);
+  SWAP(eSignal);
+  SWAP(eFatal);
+  SWAP(eArgError);
+  SWAP(eEOFError);
+  SWAP(eIndexError);
+  SWAP(eRangeError);
+  SWAP(eIOError);
+  SWAP(eRuntimeError);
+  SWAP(eSecurityError);
+  SWAP(eSystemCallError);
+  SWAP(eThreadError);
+  SWAP(eTypeError);
+  SWAP(eZeroDivError);
+  SWAP(eNotImpError);
+  SWAP(eNoMemError);
+  SWAP(eNoMethodError);
+  SWAP(eFloatDomainError);
+  SWAP(eScriptError);
+  SWAP(eNameError);
+  SWAP(eSyntaxError);
+  SWAP(eLoadError);
+  SWAP(mErrno);
+  SWAP_GVAR("$LOAD_PATH", load_path);
+  SWAP_GVAR("$LOADED_FEATURES", loaded_features);
+  SWAP_VAR(ruby_top_self, oMain);
+  SWAP_VAR(ruby_top_cref, top_cref);
+  SWAP_VAR(rb_global_tbl, globals);
+  SWAP_VAR(ruby_scope, scope);
+  SWAP_VAR(ruby_cref, ruby_cref);
+  SWAP_VAR(ruby_class, ruby_class);
+  SWAP(cMatch);
+  SWAP(cMethod);
+  SWAP(cUnboundMethod);
+  SWAP(eRegexpError);
+  SWAP(cNameErrorMesg);
+  SWAP(eSysStackError);
+  SWAP(eLocalJumpError);
 }
 
 VALUE
@@ -443,11 +362,16 @@ sandbox_whoa_whoa_whoa(go)
   go_cart *go;
 {
   VALUE exc = go->exception;
-  sandbox_swap_out(go->kit);
+  sandbox_swap(go->kit->banished, SANDBOX_REPLACE);
   curr_thread->sandbox = Qnil;
+  /* printf("WHOAWHOA! %lu -> %lu\n", go->kit->self, go->kit->banished->self); */
 
   go->kit->active = 0;
-  go->kit->banished = NULL;
+  if (go->kit->banished != NULL)
+  {
+    free(go->kit->banished);
+    go->kit->banished = NULL;
+  }
   free(go);
 
   if (!NIL_P(exc))
@@ -461,19 +385,24 @@ go_cart *
 sandbox_begin( kit )
   sandkit *kit;
 {
+  sandkit *norm;
   go_cart *go;
 
   /* save everything */
-  sandbox_swap_in(kit);
-  kit->active = 1;
-
+  norm = ALLOC(sandkit);
+  MEMZERO(norm, sandkit, 1);
+  kit->banished = norm;
   curr_thread->sandbox = kit->self;
+  /* printf("BEGINBEGIN!\n"); */
+
+  sandbox_swap(kit->banished, SANDBOX_STORE);
+  sandbox_swap(kit, SANDBOX_REPLACE);
+  kit->active = 1;
 
   go = ALLOC(go_cart);
   go->exception = Qnil;
   go->argv = ALLOC(VALUE);
   go->kit = kit;
-  go->kit->banished = &real;
   return go;
 }
 
@@ -1862,8 +1791,8 @@ Init_kit(kit)
    * io.c:VALUE rb_output_rs;
    * io.c:VALUE rb_default_rs;
    */
-  kit->load_path = sandbox_dup_into(kit, rb_ary_new());
-  kit->loaded_features = sandbox_dup_into(kit, rb_ary_new());
+  kit->load_path = rb_funcall(kit->cArray, rb_intern("new"), 0);
+  kit->loaded_features = rb_funcall(kit->cArray, rb_intern("new"), 0);
   kit->_progname = sandbox_str(kit, "(sandbox)");
   sandbox_define_hooked_variable(kit, "$0", &kit->_progname, 0, 0);
 }
@@ -2061,10 +1990,10 @@ Init_kit_io(kit)
   SAND_COPY_S(cFile, "split");
   SAND_COPY_S(cFile, "join");
 
-  SAND_DUP_CONST(cFile, "Separator");
-  SAND_DUP_CONST(cFile, "SEPARATOR");
-  SAND_DUP_CONST(cFile, "ALT_SEPARATOR");
-  SAND_DUP_CONST(cFile, "PATH_SEPARATOR");
+  // SAND_DUP_CONST(cFile, "Separator");
+  // SAND_DUP_CONST(cFile, "SEPARATOR");
+  // SAND_DUP_CONST(cFile, "ALT_SEPARATOR");
+  // SAND_DUP_CONST(cFile, "PATH_SEPARATOR");
 
   SAND_COPY(cIO, "stat"); /* this is IO's method */
   SAND_COPY(cFile, "lstat");
@@ -2205,8 +2134,8 @@ static void
 Init_kit_env(kit)
   sandkit *kit;
 {
-  rb_define_const(kit->cObject, "ENV", sandbox_dup_into(kit, 
-        rb_funcall(rb_const_get(rb_cObject, rb_intern("ENV")), rb_intern("to_hash"), 0)));
+  // rb_define_const(kit->cObject, "ENV", sandbox_dup_into(kit, 
+  //       rb_funcall(rb_const_get(rb_cObject, rb_intern("ENV")), rb_intern("to_hash"), 0)));
   SAND_COPY_KERNEL("syscall");
   SAND_COPY_KERNEL("open");
   SAND_COPY_KERNEL("printf");
@@ -2222,7 +2151,7 @@ Init_kit_env(kit)
   SAND_COPY_KERNEL("p");
   SAND_COPY(mKernel, "display");
 
-  kit->load_path = sandbox_dup_into(kit, rb_gv_get("$LOAD_PATH"));
+  // kit->load_path = sandbox_dup_into(kit, rb_gv_get("$LOAD_PATH"));
   /*
   rb_define_variable("$stdin", &rb_stdin);
   rb_stdin = prep_stdio(stdin, FMODE_READABLE, rb_cIO);
@@ -2680,98 +2609,11 @@ Init_kit_prelude(kit)
 
 void Init_sand_table()
 {
-  real.tbl = rb_class_tbl;
-  real.globals = rb_global_tbl;
-  real.self = Qnil;
-  real._progname = Qnil;
-  real.cObject = rb_cObject;
-  real.cModule = rb_cModule;
-  real.cClass = rb_cClass;
-  real.mKernel = rb_mKernel;
-  real.oMain = ruby_top_self;
-  real.cArray = rb_cArray;
-  real.cBignum = rb_cBignum;
-  real.cBinding = rb_cBinding;
-  real.mComparable = rb_mComparable;
-  real.cCont = rb_cCont;
-  real.cData = rb_cData;
-  real.cDir = rb_cDir;
-  real.mEnumerable = rb_mEnumerable;
-  real.eException = rb_eException;
-  real.cFalseClass = rb_cFalseClass;
-  real.mFConst = Qnil;
-  real.cFile = rb_cFile;
-  real.mFileTest = rb_mFileTest;
-  real.cFixnum = rb_cFixnum;
-  real.cFloat = rb_cFloat;
-  real.mGC = rb_mGC;
-  real.cHash = rb_cHash;
-  real.cInteger = rb_cInteger;
-  real.cIO = rb_cIO;
-  real.mMarshal = Qnil;
-  real.mMath = rb_mMath;
-  real.cMatch = rb_cMatch;
-  real.cMethod = rb_cMethod;
-  real.cNilClass = rb_cNilClass;
-  real.cNumeric = rb_cNumeric;
-  real.mObSpace = Qnil;
-  real.mPrecision = rb_mPrecision;
-  real.cProc = rb_cProc;
-  real.cRange = rb_cRange;
-  real.cRegexp = rb_cRegexp;
-  real.cStat = rb_cStat;
-  real.cString = rb_cString;
-  real.cStruct = rb_cStruct;
-  real.cSymbol = rb_cSymbol;
-  real.cThread = rb_cThread;
-  real.cThGroup = Qnil;
-  real.cTime = rb_cTime;
-  real.cTrueClass = rb_cTrueClass;
-  real.cUnboundMethod = rb_cUnboundMethod;
-  real.eStandardError = rb_eStandardError;
-  real.eSystemExit = rb_eSystemExit;
-  real.eInterrupt = rb_eInterrupt;
-  real.eSignal = rb_eSignal;
-  real.eFatal = rb_eFatal;
-  real.eArgError = rb_eArgError;
-  real.eEOFError = rb_eEOFError;
-  real.eIndexError = rb_eIndexError;
-  real.eRangeError = rb_eRangeError;
-  real.eRegexpError = rb_eRegexpError;
-  real.eIOError = rb_eIOError;
-  real.eRuntimeError = rb_eRuntimeError;
-  real.eSecurityError = rb_eSecurityError;
-  real.eSystemCallError = rb_eSystemCallError;
-  real.eSysStackError = rb_eSysStackError;
-  real.eThreadError = rb_eThreadError;
-  real.eTypeError = rb_eTypeError;
-  real.eZeroDivError = rb_eZeroDivError;
-  real.eNotImpError = rb_eNotImpError;
-  real.eNoMemError = rb_eNoMemError;
-  real.eNoMethodError = rb_eNoMethodError;
-  real.eFloatDomainError = rb_eFloatDomainError;
-  real.eScriptError = rb_eScriptError;
-  real.eNameError = rb_eNameError;
-  real.cNameErrorMesg = rb_cNameErrorMesg;
-  real.eSyntaxError = rb_eSyntaxError;
-  real.eLoadError = rb_eLoadError;
-  real.eLocalJumpError = rb_eLocalJumpError;
-  real.mErrno = rb_mErrno;
-  real.load_path = rb_gv_get("$LOAD_PATH");
-  real.loaded_features = rb_gv_get("$LOADED_FEATURES");
-  real.wrapper = Qnil;
-  real.klass = Qnil;
-  real.dln_librefs = Qnil;
-  real.top_cref = ruby_top_cref;
-  real.ruby_cref = ruby_cref;
-  real.ruby_class = ruby_class;
-  real.scope = ruby_scope;
-  real.banished = NULL;
-  real.active = 1;
-
   /* FIXME: all threads should run through sandbox_save. */
   curr_thread->sandbox_save = sandbox_save;
   curr_thread->sandbox_restore = sandbox_restore;
+
+  sandbox_swap(&real, SANDBOX_STORE);
 
   rb_cSandbox = rb_define_class("Sandbox", rb_cObject);
   rb_define_const( rb_cSandbox, "VERSION", rb_str_new2( SAND_VERSION ) );

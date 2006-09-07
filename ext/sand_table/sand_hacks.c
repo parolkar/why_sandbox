@@ -437,12 +437,13 @@ static void  var_setter();
 static void  var_marker();
 
 VALUE
-rb_swap_global(name, val)
+sandbox_swap_global(kit, name, val)
+  sandkit *kit;
   char *name;
   VALUE val;
 {
   struct global_entry *entry;
-  if (st_lookup(rb_global_tbl, rb_intern(name), (st_data_t *)&entry)) {
+  if (st_lookup(kit->globals, rb_intern(name), (st_data_t *)&entry)) {
     VALUE *ptr = (VALUE *)entry->var->data;
     VALUE old = *ptr;
     *ptr = val;
