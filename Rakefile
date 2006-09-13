@@ -41,7 +41,8 @@ spec =
         s.name = NAME
         s.version = VERS
         s.platform = Gem::Platform::RUBY
-        s.has_rdoc = false
+        s.has_rdoc = true
+        s.rdoc_options.push '--exclude', '(test|extras)/.*', '--exclude', 'setup\.rb'
         s.extra_rdoc_files = ["README", "CHANGELOG", "COPYING"]
         s.summary = "a freaky-freaky sandbox library, copies the symbol table, mounts it, evals..."
         s.description = s.summary
@@ -107,7 +108,8 @@ Win32Spec = Gem::Specification.new do |s|
   s.name = NAME
   s.version = VERS
   s.platform = Gem::Platform::WIN32
-  s.has_rdoc = false
+  s.has_rdoc = true
+  s.rdoc_options.push '--exclude', '(test|extras)/.*', '--exclude', 'setup\.rb'
   s.extra_rdoc_files = ["README", "CHANGELOG", "COPYING"]
   s.summary = "a freaky-freaky sandbox library, copies the symbol table, mounts it, evals..."
   s.description = s.summary

@@ -193,6 +193,14 @@ sandbox_alloc(class)
 
 #define SAND_INIT(N) if ( init_##N == 0 ) { Init_kit_##N(kit); init_##N = 1; }
 
+/*
+ *  call-seq:
+ *     Sandbox.new(opts={})   => obj
+ *
+ *  Returns a newly created sandbox; a hash containing default options for
+ *  Sandbox#eval in this sandbox may be given in +opts+.  (See Sandbox#eval.)
+ *
+ */
 static VALUE
 sandbox_initialize(argc, argv, self)
   int argc;
@@ -436,6 +444,7 @@ sandbox_go_go_go(go)
   return rb_rescue2(sandbox_main_eval, (VALUE)go, sandbox_reraise, (VALUE)go, rb_cObject, 0);
 }
 
+/* :nodoc: */
 VALUE
 sandbox_eval( self, str )
   VALUE self, str;
@@ -448,6 +457,13 @@ sandbox_eval( self, str )
   return rb_ensure(sandbox_go_go_go, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
 }
 
+/*
+ *  call-seq:
+ *     sandbox.import(class)   => nil
+ *
+ *  Imports +class+ into +sandbox+.
+ *
+ */
 VALUE
 sandbox_import( self, klass )
   VALUE self, klass;
@@ -459,6 +475,7 @@ sandbox_import( self, klass )
   return Qnil;
 }
 
+/* :nodoc: */
 VALUE
 sandbox_finish( self )
   VALUE self;
@@ -481,6 +498,7 @@ sandbox_safe_go_go_go(go)
   return rb_marshal_dump(sandbox_go_go_go(go), Qnil);
 }
 
+/* :nodoc: */
 VALUE
 sandbox_safe_eval( self, str )
   VALUE self, str;
@@ -495,6 +513,14 @@ sandbox_safe_eval( self, str )
   return rb_marshal_load(marshed);
 }
 
+/*
+ *  call-seq:
+ *     sandbox.active?   => boolean
+ *
+ *  Returns true if +sandbox+ is the currently active environment in the
+ *  interpreter.
+ *
+ */
 VALUE
 sandbox_is_active( self )
   VALUE self;
@@ -504,6 +530,13 @@ sandbox_is_active( self )
   return kit->active == 0 ? Qfalse : Qtrue;
 }
 
+/*
+ *  call-seq:
+ *     sandbox.main   => obj
+ *
+ *  Returns the sandbox representing the top-level Ruby environment.
+ *
+ */
 VALUE
 sandbox_get_main( self )
   VALUE self;
@@ -525,6 +558,14 @@ sandbox_dup_into( kit, obj )
   return sandobj;
 }
 
+/*
+ *  call-seq:
+ *     Sandbox.safe(opts={})   => obj
+ *
+ *  Returns a newly created restricted sandbox.
+ *  (See Sandbox.new and Sandbox::Safe.)
+ *
+ */
 VALUE sandbox_safe( argc, argv, self )
   int argc;
   VALUE *argv;
@@ -2586,10 +2627,13 @@ void Init_sand_table()
   sandbox_swap(&real, SANDBOX_STORE);
 
   rb_cSandbox = rb_define_class("Sandbox", rb_cObject);
+  /* :nodoc: */
   rb_define_const( rb_cSandbox, "VERSION", rb_str_new2( SAND_VERSION ) );
+  /* :nodoc: */
   rb_define_const( rb_cSandbox, "REV_ID", rb_str_new2( SAND_REV_ID ) );
   rb_define_alloc_func( rb_cSandbox, sandbox_alloc );
-  rb_define_attr( rb_cSandbox, "options", 1, 1 );
+  /* Default options for Sandbox#eval in this sandbox. (See Sandbox.new.) */
+  rb_define_attr( rb_cSandbox, "options", 1, 0 );
   rb_define_method( rb_cSandbox, "initialize", sandbox_initialize, -1 );
   rb_define_method( rb_cSandbox, "_eval", sandbox_eval, 1 );
   rb_define_method( rb_cSandbox, "active?", sandbox_is_active, 0 );
