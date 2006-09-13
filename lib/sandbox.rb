@@ -16,7 +16,7 @@ class Sandbox
   end
 
   #
-  # Raised when the duration of a sandbox operation exceeds a specified
+  # Raised when the duration of a sandbox evaluation exceeds a specified
   # timeout.  (See Sandbox#eval.)
   #
   class TimeoutError < Sandbox::Exception
