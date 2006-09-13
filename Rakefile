@@ -59,7 +59,7 @@ spec =
         s.require_path = "lib"
         s.extensions = FileList["ext/**/extconf.rb"].to_a
         s.bindir = "bin"
-        s.executables = ['sandbox_server']
+        s.executables = %w(sandbox_irb sandbox_server)
     end
 
 Rake::GemPackageTask.new(spec) do |p|
@@ -122,7 +122,7 @@ Win32Spec = Gem::Specification.new do |s|
   s.require_path = "lib"
   s.extensions = []
   s.bindir = "bin"
-  s.executables = ['sandbox_server']
+  s.executables = %w(sandbox_irb sandbox_server)
 end
   
 WIN32_PKG_DIR = "#{NAME}-#{VERS}"
