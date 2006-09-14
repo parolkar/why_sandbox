@@ -534,7 +534,7 @@ sandbox_is_active( self )
  *  call-seq:
  *     sandbox.main   => obj
  *
- *  Returns the sandbox representing the top-level Ruby environment.
+ *  Returns the top-level 'main' object in +sandbox+.
  *
  */
 VALUE
