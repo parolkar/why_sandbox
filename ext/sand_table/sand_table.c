@@ -2629,6 +2629,7 @@ void Init_sand_table()
   real.scope = alloc_scope();
   real.self = Data_Wrap_Struct( rb_cSandbox, mark_sandbox, NULL, &real );
   ruby_sandbox = real.self;
+  rb_ivar_set(real.self, s_options, rb_hash_new());
 
   /* FIXME: all threads should run through sandbox_save. */
   curr_thread->sandbox_save = sandbox_save;
