@@ -465,6 +465,11 @@ sandbox_import( self, klass )
   VALUE sandklass;
   sandkit *kit;
   Data_Get_Struct( self, sandkit, kit );
+  if (TYPE(klass) != T_MODULE && TYPE(klass) != T_CLASS)
+  {
+    rb_raise(rb_eTypeError, "can only import classes or modules");
+  }
+  rb_check_type( klass, rb_cModule );
   sandklass = sandbox_import_class_path( kit, rb_class2name( klass ) );
   return Qnil;
 }
