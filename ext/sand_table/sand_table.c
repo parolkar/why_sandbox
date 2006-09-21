@@ -544,6 +544,19 @@ VALUE sandbox_safe( argc, argv, self )
   }
 }
 
+/*
+ *  call-seq:
+ *     Sandbox.current   => sandbox
+ *
+ *  Returns the current sandbox.
+ *
+ */
+VALUE sandbox_current( self )
+  VALUE self;
+{
+  return ruby_sandbox;
+}
+
 static void
 Init_kit(kit)
   sandkit *kit;
@@ -2596,6 +2609,7 @@ void Init_sand_table()
   rb_define_method( rb_cSandbox, "import", sandbox_import, 1 );
   rb_define_method( rb_cSandbox, "main", sandbox_get_main, 0 );
   rb_define_singleton_method( rb_cSandbox, "safe", sandbox_safe, -1 );
+  rb_define_singleton_method( rb_cSandbox, "current", sandbox_current, 0 );
   rb_cSandboxSafe = rb_define_class_under(rb_cSandbox, "Safe", rb_cSandbox);
   rb_define_method( rb_cSandboxSafe, "_eval", sandbox_safe_eval, 1 );
   rb_eSandboxException = rb_define_class_under(rb_cSandbox, "Exception", rb_eException);
