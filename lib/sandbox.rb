@@ -3,7 +3,6 @@ require 'thread'
 
 class Sandbox
   private :_eval
-  private :finish
 
   BUILD = "#{VERSION}.#{REV_ID[6..-3]}" #:nodoc:
   PRELUDE = File.expand_path("../sandbox/prelude.rb", __FILE__) #:nodoc:
@@ -45,26 +44,22 @@ class Sandbox
     opts = @options.merge(opts)
     if opts[:timeout] or opts[:safelevel]
       th, exc, timed_out = nil, nil, false
-      begin
-        safelevel = opts[:safelevel]
-        th = Thread.start(str) do
-          $SAFE = safelevel if safelevel and safelevel > $SAFE
-          begin
-            _eval(str)
-          rescue Exception => exc
-          end
+      safelevel = opts[:safelevel]
+      th = Thread.start(str) do
+        $SAFE = safelevel if safelevel and safelevel > $SAFE
+        begin
+          _eval(str)
+        rescue Exception => exc
         end
-        th.join(opts[:timeout])
-        if th.alive?
-          if th.respond_to? :kill!
-            th.kill!
-          else
-            th.kill
-          end
-          timed_out = true
+      end
+      th.join(opts[:timeout])
+      if th.alive?
+        if th.respond_to? :kill!
+          th.kill!
+        else
+          th.kill
         end
-      ensure
-        finish
+        timed_out = true
       end
       if timed_out
         raise TimeoutError, "#{self.class}#eval timed out"

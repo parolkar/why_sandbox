@@ -32,8 +32,6 @@ static void
 mark_sandbox(kit)
   sandkit *kit;
 {
-  if (kit->banished != NULL)
-    mark_sandbox(kit->banished);
   rb_mark_tbl(kit->tbl);
   rb_gc_mark_maybe(kit->cObject);
   rb_gc_mark_maybe(kit->cModule);
@@ -130,19 +128,16 @@ static VALUE
 sandbox_restore(thread)
   rb_thread_t thread;
 {
+  if (NIL_P(thread->sandbox))
+  {
+    thread->sandbox = real.self;
+  }
   if (ruby_sandbox != thread->sandbox)
   {
     /* printf("KIT RESTORE: %lu, %lu -> %lu\n", thread, thread->sandbox, ruby_sandbox); */
     sandkit *kit;
-    if (NIL_P(thread->sandbox) && !NIL_P(ruby_sandbox))
-    {
-      sandbox_swap(&real, SANDBOX_REPLACE);
-    }
-    else if (!NIL_P(thread->sandbox))
-    {
-      Data_Get_Struct( thread->sandbox, sandkit, kit );
-      sandbox_swap(kit, SANDBOX_REPLACE);
-    }
+    Data_Get_Struct( thread->sandbox, sandkit, kit );
+    sandbox_swap(kit, SANDBOX_REPLACE);
   }
   return Qnil;
 }
@@ -167,6 +162,17 @@ sandbox_alloc_obj(klass)
   return (VALUE)obj;
 }
 
+static struct SCOPE *
+alloc_scope()
+{
+  NEWOBJ(_scope, struct SCOPE);
+  OBJSETUP(_scope, 0, T_SCOPE);
+  _scope->local_tbl = 0;
+  _scope->local_vars = 0;
+  _scope->flags = 0;
+  return _scope;
+}
+
 VALUE sandbox_alloc _((VALUE));
 VALUE 
 sandbox_alloc(class)
@@ -176,12 +182,7 @@ sandbox_alloc(class)
   MEMZERO(kit, sandkit, 1);
   Init_kit(kit);
 
-  NEWOBJ(_scope, struct SCOPE);
-  OBJSETUP(_scope, 0, T_SCOPE);
-  _scope->local_tbl = 0;
-  _scope->local_vars = 0;
-  _scope->flags = 0;
-  kit->scope = _scope;
+  kit->scope = alloc_scope();
 
   kit->top_cref = rb_node_newnode(NODE_CREF,kit->cObject,0,0);
   kit->ruby_cref = kit->top_cref;
@@ -266,10 +267,13 @@ sandbox_initialize(argc, argv, self)
   return self;
 }
 
+/* should be stack-allocated so GC can follow banished and scope pointers */
 typedef struct {
   VALUE *argv;
   VALUE exception;
   sandkit *kit;
+  VALUE banished;
+  struct SCOPE *scope;
 } go_cart;
 
 #define SWAP(N) \
@@ -355,7 +359,6 @@ sandbox_swap(kit, mode)
   SWAP_VAR(ruby_top_self, oMain);
   SWAP_VAR(ruby_top_cref, top_cref);
   SWAP_VAR(rb_global_tbl, globals);
-  SWAP_VAR(ruby_scope, scope);
   SWAP_VAR(ruby_cref, ruby_cref);
   SWAP_VAR(ruby_class, ruby_class);
   SWAP(cMatch);
@@ -372,17 +375,13 @@ sandbox_whoa_whoa_whoa(go)
   go_cart *go;
 {
   VALUE exc = go->exception;
-  sandbox_swap(go->kit->banished, SANDBOX_REPLACE);
-  curr_thread->sandbox = Qnil;
-  /* printf("WHOAWHOA! %lu -> %lu\n", go->kit->self, go->kit->banished->self); */
+  sandkit *banished;
 
-  go->kit->active = 0;
-  if (go->kit->banished != NULL)
-  {
-    free(go->kit->banished);
-    go->kit->banished = NULL;
-  }
-  free(go);
+  Data_Get_Struct( go->banished, sandkit, banished );
+  sandbox_swap(banished, SANDBOX_REPLACE);
+  ruby_scope = go->scope;
+  curr_thread->sandbox = ruby_sandbox;
+  /* printf("WHOAWHOA! %lu -> %lu\n", go->kit->self, go->banished); */
 
   if (!NIL_P(exc))
   {
@@ -391,29 +390,23 @@ sandbox_whoa_whoa_whoa(go)
   }
 }
 
-go_cart *
-sandbox_begin( kit )
+void
+sandbox_begin( kit, go )
   sandkit *kit;
-{
-  sandkit *norm;
   go_cart *go;
-
+{
   /* save everything */
-  norm = ALLOC(sandkit);
-  MEMZERO(norm, sandkit, 1);
-  kit->banished = norm;
+  go->banished = ruby_sandbox;
+  go->scope = ruby_scope;
   curr_thread->sandbox = kit->self;
   /* printf("BEGINBEGIN!\n"); */
 
-  sandbox_swap(kit->banished, SANDBOX_STORE);
   sandbox_swap(kit, SANDBOX_REPLACE);
-  kit->active = 1;
+  ruby_scope = kit->scope;
 
-  go = ALLOC(go_cart);
   go->exception = Qnil;
   go->argv = ALLOC(VALUE);
   go->kit = kit;
-  return go;
 }
 
 VALUE
@@ -449,12 +442,12 @@ VALUE
 sandbox_eval( self, str )
   VALUE self, str;
 {
-  go_cart *go;
+  go_cart go;
   sandkit *kit;
   Data_Get_Struct( self, sandkit, kit );
-  go = sandbox_begin( kit );
-  go->argv[0] = str;
-  return rb_ensure(sandbox_go_go_go, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
+  sandbox_begin(kit, &go);
+  go.argv[0] = str;
+  return rb_ensure(sandbox_go_go_go, (VALUE)&go, sandbox_whoa_whoa_whoa, (VALUE)&go);
 }
 
 /*
@@ -475,22 +468,6 @@ sandbox_import( self, klass )
   return Qnil;
 }
 
-/* :nodoc: */
-VALUE
-sandbox_finish( self )
-  VALUE self;
-{
-  sandkit *kit;
-  Data_Get_Struct( self, sandkit, kit );
-  if ( kit->active == 1 ) {
-    go_cart *go = ALLOC(go_cart);
-    go->exception = Qnil;
-    go->kit = kit;
-    sandbox_whoa_whoa_whoa(go);
-  }
-  return Qnil;
-}
-
 VALUE
 sandbox_safe_go_go_go(go)
   go_cart *go;
@@ -504,30 +481,13 @@ sandbox_safe_eval( self, str )
   VALUE self, str;
 {
   VALUE marshed;
-  go_cart *go;
+  go_cart go;
   sandkit *kit;
   Data_Get_Struct( self, sandkit, kit );
-  go = sandbox_begin( kit );
-  go->argv[0] = str;
-  marshed = rb_ensure(sandbox_safe_go_go_go, (VALUE)go, sandbox_whoa_whoa_whoa, (VALUE)go);
+  sandbox_begin(kit, &go);
+  go.argv[0] = str;
+  marshed = rb_ensure(sandbox_safe_go_go_go, (VALUE)&go, sandbox_whoa_whoa_whoa, (VALUE)&go);
   return rb_marshal_load(marshed);
-}
-
-/*
- *  call-seq:
- *     sandbox.active?   => boolean
- *
- *  Returns true if +sandbox+ is the currently active environment in the
- *  interpreter.
- *
- */
-VALUE
-sandbox_is_active( self )
-  VALUE self;
-{
-  sandkit *kit;
-  Data_Get_Struct( self, sandkit, kit );
-  return kit->active == 0 ? Qfalse : Qtrue;
 }
 
 /*
@@ -552,9 +512,10 @@ sandbox_dup_into( kit, obj )
   VALUE obj;
 {
   VALUE sandobj = rb_marshal_dump(obj, Qnil);
-  go_cart *go = sandbox_begin(kit);
+  go_cart go;
+  sandbox_begin(kit, &go);
   sandobj = rb_marshal_load(sandobj);
-  sandbox_whoa_whoa_whoa(go);
+  sandbox_whoa_whoa_whoa(&go);
   return sandobj;
 }
 
@@ -2605,9 +2566,10 @@ static void
 Init_kit_prelude(kit)
   sandkit *kit;
 {
+  go_cart go;
   VALUE prelude = rb_const_get(rb_cSandbox, rb_intern("PRELUDE"));
   StringValue(prelude);
-  go_cart *go = sandbox_begin(kit);
+  sandbox_begin(kit, &go);
 #if defined(HAVE_TIMES) || defined(_WIN32)
   if (kit->mProcess != 0) {
     kit->sTms = rb_struct_define("Tms", "utime", "stime", "cutime", "cstime", NULL);
@@ -2615,17 +2577,11 @@ Init_kit_prelude(kit)
 #endif
 
   rb_load(prelude, 0);
-  sandbox_whoa_whoa_whoa(go);
+  sandbox_whoa_whoa_whoa(&go);
 }
 
 void Init_sand_table()
 {
-  /* FIXME: all threads should run through sandbox_save. */
-  curr_thread->sandbox_save = sandbox_save;
-  curr_thread->sandbox_restore = sandbox_restore;
-
-  sandbox_swap(&real, SANDBOX_STORE);
-
   rb_cSandbox = rb_define_class("Sandbox", rb_cObject);
   /* :nodoc: */
   rb_define_const( rb_cSandbox, "VERSION", rb_str_new2( SAND_VERSION ) );
@@ -2636,10 +2592,8 @@ void Init_sand_table()
   rb_define_attr( rb_cSandbox, "options", 1, 0 );
   rb_define_method( rb_cSandbox, "initialize", sandbox_initialize, -1 );
   rb_define_method( rb_cSandbox, "_eval", sandbox_eval, 1 );
-  rb_define_method( rb_cSandbox, "active?", sandbox_is_active, 0 );
   rb_define_method( rb_cSandbox, "import", sandbox_import, 1 );
   rb_define_method( rb_cSandbox, "main", sandbox_get_main, 0 );
-  rb_define_method( rb_cSandbox, "finish", sandbox_finish, 0 );
   rb_define_singleton_method( rb_cSandbox, "safe", sandbox_safe, -1 );
   rb_cSandboxSafe = rb_define_class_under(rb_cSandbox, "Safe", rb_cSandbox);
   rb_define_method( rb_cSandboxSafe, "_eval", sandbox_safe_eval, 1 );
@@ -2653,4 +2607,15 @@ void Init_sand_table()
   Qreal = ID2SYM(rb_intern("real"));
   Qio = ID2SYM(rb_intern("io"));
   Qall = ID2SYM(rb_intern("all"));
+
+  real.self = Qnil;
+  rb_global_variable(&real.self);
+  sandbox_swap(&real, SANDBOX_STORE);
+  real.scope = alloc_scope();
+  real.self = Data_Wrap_Struct( rb_cSandbox, mark_sandbox, NULL, &real );
+  ruby_sandbox = real.self;
+
+  /* FIXME: all threads should run through sandbox_save. */
+  curr_thread->sandbox_save = sandbox_save;
+  curr_thread->sandbox_restore = sandbox_restore;
 }

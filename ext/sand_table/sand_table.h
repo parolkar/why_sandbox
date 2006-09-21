@@ -132,8 +132,6 @@ typedef struct SANDKIT {
   NODE *ruby_cref;
   VALUE ruby_class;
   struct SCOPE *scope;
-  struct SANDKIT *banished;
-  int active;
 } sandkit;
 
 #define SAND_COPY(K, M) sandbox_copy_method(kit->K, rb_intern(M), rb_##K);
