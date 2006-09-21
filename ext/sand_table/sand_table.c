@@ -7,6 +7,7 @@
  * Copyright (C) 2006 why the lucky stiff
  */
 #include "sand_table.h"
+#include <math.h>
 
 #define SAND_REV_ID "$Rev$"
 
