@@ -665,3 +665,47 @@ sandbox_errinfo_setter(val, id, var)
   }
   *var = val;
 }  
+
+VALUE
+sandbox_last_match_getter()
+{
+    return rb_reg_last_match(rb_backref_get());
+}
+
+VALUE
+sandbox_prematch_getter()
+{
+    return rb_reg_match_pre(rb_backref_get());
+}
+
+VALUE
+sandbox_postmatch_getter()
+{
+    return rb_reg_match_post(rb_backref_get());
+}
+
+VALUE
+sandbox_last_paren_match_getter()
+{
+    return rb_reg_match_last(rb_backref_get());
+}
+
+VALUE
+sandbox_match_getter()
+{
+    VALUE match = rb_backref_get();
+
+    if (NIL_P(match)) return Qnil;
+    rb_match_busy(match);
+    return match;
+}
+
+void
+sandbox_match_setter(val)
+    VALUE val;
+{
+    if (!NIL_P(val)) {
+	Check_Type(val, T_MATCH);
+    }
+    rb_backref_set(val);
+}

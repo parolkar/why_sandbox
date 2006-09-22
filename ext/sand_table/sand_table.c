@@ -13,16 +13,17 @@
 
 static VALUE ruby_sandbox = Qnil;
 static sandkit real;
+static sandkit base;
 
 static VALUE Qimport, Qinit, Qload, Qenv, Qio, Qreal, Qall;
 static VALUE rb_cSandbox, rb_cSandboxSafe, rb_eSandboxException;
 static ID s_options;
 
-static void Init_kit _((sandkit *));
-static void Init_kit_load _((sandkit *));
-static void Init_kit_io _((sandkit *));
-static void Init_kit_env _((sandkit *));
-static void Init_kit_real _((sandkit *));
+static void Init_kit _((sandkit *, int));
+static void Init_kit_load _((sandkit *, int));
+static void Init_kit_io _((sandkit *, int));
+static void Init_kit_env _((sandkit *, int));
+static void Init_kit_real _((sandkit *, int));
 static void Init_kit_prelude _((sandkit *));
 void sandbox_swap(sandkit *kit, int mode);
 
@@ -122,6 +123,16 @@ sandbox_save(thread)
   rb_thread_t thread;
 {
   /* printf("KIT SAVE: %lu, %lu -> %lu\n", thread, thread->sandbox, ruby_sandbox); */
+  if (NIL_P(thread->sandbox))
+  {
+    sandbox_swap(&real, SANDBOX_STORE);
+  }
+  else
+  {
+    sandkit *kit;
+    Data_Get_Struct( thread->sandbox, sandkit, kit );
+    sandbox_swap(kit, SANDBOX_STORE);
+  }
   return Qnil;
 }
 
@@ -129,17 +140,19 @@ static VALUE
 sandbox_restore(thread)
   rb_thread_t thread;
 {
+  /* printf("KIT RESTORE: %lu, %lu -> %lu\n", thread, thread->sandbox, ruby_sandbox); */
   if (NIL_P(thread->sandbox))
   {
     thread->sandbox = real.self;
   }
   if (ruby_sandbox != thread->sandbox)
   {
-    /* printf("KIT RESTORE: %lu, %lu -> %lu\n", thread, thread->sandbox, ruby_sandbox); */
     sandkit *kit;
+    ruby_sandbox = thread->sandbox;
     Data_Get_Struct( thread->sandbox, sandkit, kit );
     sandbox_swap(kit, SANDBOX_REPLACE);
   }
+  /* printf("END KIT RESTORE: %lu\n", thread); */
   return Qnil;
 }
 
@@ -181,7 +194,7 @@ sandbox_alloc(class)
 {
   sandkit *kit = ALLOC(sandkit);
   MEMZERO(kit, sandkit, 1);
-  Init_kit(kit);
+  Init_kit(kit, 1);
 
   kit->scope = alloc_scope();
 
@@ -193,7 +206,7 @@ sandbox_alloc(class)
   return kit->self;
 }
 
-#define SAND_INIT(N) if ( init_##N == 0 ) { Init_kit_##N(kit); init_##N = 1; }
+#define SAND_INIT(N) if ( init_##N == 0 ) { Init_kit_##N(kit, 1); init_##N = 1; }
 
 /*
  *  call-seq:
@@ -558,8 +571,9 @@ VALUE sandbox_current( self )
 }
 
 static void
-Init_kit(kit)
+Init_kit(kit, use_base)
   sandkit *kit;
+  int use_base;
 {
   VALUE metaclass;
 
@@ -1574,13 +1588,13 @@ Init_kit(kit)
 
   kit->eRegexpError = sandbox_defclass(kit, "RegexpError", kit->eStandardError);
 
-  /*
-  rb_define_virtual_variable("$~", match_getter, match_setter);
-  rb_define_virtual_variable("$&", last_match_getter, 0);
-  rb_define_virtual_variable("$`", prematch_getter, 0);
-  rb_define_virtual_variable("$'", postmatch_getter, 0);
-  rb_define_virtual_variable("$+", last_paren_match_getter, 0);
+  sandbox_define_virtual_variable(kit, "$~", sandbox_match_getter, sandbox_match_setter);
+  sandbox_define_virtual_variable(kit, "$&", sandbox_last_match_getter, 0);
+  sandbox_define_virtual_variable(kit, "$`", sandbox_prematch_getter, 0);
+  sandbox_define_virtual_variable(kit, "$'", sandbox_postmatch_getter, 0);
+  sandbox_define_virtual_variable(kit, "$+", sandbox_last_paren_match_getter, 0);
 
+  /*
   rb_define_virtual_variable("$=", ignorecase_getter, ignorecase_setter);
   rb_define_virtual_variable("$KCODE", kcode_getter, kcode_setter);
   rb_define_virtual_variable("$-K", kcode_getter, kcode_setter);
@@ -1816,8 +1830,9 @@ Init_kit(kit)
 }
 
 static void
-Init_kit_load(kit)
+Init_kit_load(kit, use_base)
   sandkit *kit;
+  int use_base;
 {
   sandbox_define_readonly_variable(kit, "$:", &kit->load_path);
   sandbox_define_readonly_variable(kit, "$-I", &kit->load_path);
@@ -1842,8 +1857,9 @@ Init_kit_load(kit)
 }
 
 static void
-Init_kit_io(kit)
+Init_kit_io(kit, use_base)
   sandkit *kit;
+  int use_base;
 {
   kit->eIOError = sandbox_defclass(kit, "IOError", kit->eStandardError);
   kit->eEOFError = sandbox_defclass(kit, "EOFError", kit->eIOError);
@@ -2149,8 +2165,9 @@ Init_kit_io(kit)
 }
 
 static void
-Init_kit_env(kit)
+Init_kit_env(kit, use_base)
   sandkit *kit;
+  int use_base;
 {
   // rb_define_const(kit->cObject, "ENV", sandbox_dup_into(kit, 
   //       rb_funcall(rb_const_get(rb_cObject, rb_intern("ENV")), rb_intern("to_hash"), 0)));
@@ -2243,8 +2260,9 @@ Init_kit_env(kit)
 }
 
 static void
-Init_kit_real(kit)
+Init_kit_real(kit, use_base)
   sandkit *kit;
+  int use_base;
 {
   VALUE cThGroup;
 
@@ -2596,6 +2614,15 @@ Init_kit_prelude(kit)
 
 void Init_sand_table()
 {
+  ruby_sandbox_save = sandbox_save;
+  ruby_sandbox_restore = sandbox_restore;
+
+  Init_kit(&base, 0);
+  Init_kit_load(&base, 0);
+  Init_kit_io(&base, 0);
+  Init_kit_env(&base, 0);
+  Init_kit_real(&base, 0);
+
   rb_cSandbox = rb_define_class("Sandbox", rb_cObject);
   /* :nodoc: */
   rb_define_const( rb_cSandbox, "VERSION", rb_str_new2( SAND_VERSION ) );
@@ -2630,8 +2657,4 @@ void Init_sand_table()
   real.self = Data_Wrap_Struct( rb_cSandbox, mark_sandbox, NULL, &real );
   ruby_sandbox = real.self;
   rb_ivar_set(real.self, s_options, rb_hash_new());
-
-  /* FIXME: all threads should run through sandbox_save. */
-  curr_thread->sandbox_save = sandbox_save;
-  curr_thread->sandbox_restore = sandbox_restore;
 }

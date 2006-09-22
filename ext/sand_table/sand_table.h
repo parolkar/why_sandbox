@@ -134,18 +134,19 @@ typedef struct SANDKIT {
   struct SCOPE *scope;
 } sandkit;
 
-#define SAND_COPY(K, M) sandbox_copy_method(kit->K, rb_intern(M), rb_##K);
-#define SAND_COPY_ALLOC(K) Check_Type(kit->K, T_CLASS); sandbox_copy_method(RBASIC(kit->K)->klass, ID_ALLOCATOR, RBASIC(rb_##K)->klass);
-#define SAND_COPY_S(K, M) sandbox_copy_method(sandbox_singleton_class(kit, kit->K), rb_intern(M), rb_singleton_class(rb_##K));
-#define SAND_COPY_MAIN(M) sandbox_copy_method(sandbox_singleton_class(kit, kit->oMain), rb_intern(M), rb_singleton_class(ruby_top_self));
-#define SAND_COPY_CONST(K, M) rb_const_set(kit->K, rb_intern(M), rb_const_get(rb_##K, rb_intern(M)));
-#define SAND_COPY_IF_CONST(K, M) if (rb_const_defined(rb_##K, rb_intern(M))) { SAND_COPY_CONST(K, M) }
+#define SAND_BASE(K) (use_base == 0 ? rb_##K : base.K)
+#define SAND_COPY(K, M) sandbox_copy_method(kit->K, rb_intern(M), SAND_BASE(K));
+#define SAND_COPY_ALLOC(K) Check_Type(kit->K, T_CLASS); sandbox_copy_method(RBASIC(kit->K)->klass, ID_ALLOCATOR, RBASIC(SAND_BASE(K))->klass);
+#define SAND_COPY_S(K, M) sandbox_copy_method(sandbox_singleton_class(kit, kit->K), rb_intern(M), (use_base == 0 ? rb_singleton_class(rb_##K) : sandbox_singleton_class(&base, base.K)));
+#define SAND_COPY_MAIN(M) sandbox_copy_method(sandbox_singleton_class(kit, kit->oMain), rb_intern(M), (use_base == 0 ? rb_singleton_class(ruby_top_self) : sandbox_singleton_class(&base, base.oMain)));
+#define SAND_COPY_CONST(K, M) rb_const_set(kit->K, rb_intern(M), rb_const_get(SAND_BASE(K), rb_intern(M)));
+#define SAND_COPY_IF_CONST(K, M) if (rb_const_defined(SAND_BASE(K), rb_intern(M))) { SAND_COPY_CONST(K, M) }
 #define SAND_COPY_KERNEL(M) SAND_COPY(mKernel, M); SAND_COPY_S(mKernel, M)
 #define SAND_UNDEF(M, K) rb_undef_method(sandbox_singleton_class(kit, kit->M), K);
 #define SAND_SYSERR(K, M) \
-  if (rb_const_defined(rb_##K, rb_intern(M))) { \
+  if (rb_const_defined(SAND_BASE(K), rb_intern(M))) { \
     VALUE error = rb_define_class_under(kit->mErrno, M, kit->eSystemCallError); \
-    rb_define_const(error, "Errno", rb_const_get(rb_const_get(rb_##K, rb_intern(M)), rb_intern("Errno"))); \
+    rb_define_const(error, "Errno", rb_const_get(rb_const_get(SAND_BASE(K), rb_intern(M)), rb_intern("Errno"))); \
   }
 
 VALUE sandbox_module_new(sandkit *);
@@ -165,6 +166,12 @@ void sandbox_define_readonly_variable(sandkit *, const char  *, VALUE *);
 void sandbox_define_virtual_variable(sandkit *, const char *, VALUE (*)(), void (*)());
 void sandbox_mark_globals(st_table *);
 void sandbox_errinfo_setter(VALUE val, ID id, VALUE *var);
+VALUE sandbox_last_match_getter();
+VALUE sandbox_prematch_getter();
+VALUE sandbox_postmatch_getter();
+VALUE sandbox_last_paren_match_getter();
+VALUE sandbox_match_getter();
+void sandbox_match_setter(VALUE);
 
 #if defined(__cplusplus)
 }  /* extern "C" { */
