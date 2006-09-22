@@ -406,7 +406,7 @@ sandbox_begin( kit, go )
   ruby_scope = kit->scope;
 
   go->exception = Qnil;
-  go->argv = ALLOC(VALUE);
+  go->argv = NULL;
   go->kit = kit;
 }
 
@@ -447,7 +447,7 @@ sandbox_eval( self, str )
   sandkit *kit;
   Data_Get_Struct( self, sandkit, kit );
   sandbox_begin(kit, &go);
-  go.argv[0] = str;
+  go.argv = &str;
   return rb_ensure(sandbox_go_go_go, (VALUE)&go, sandbox_whoa_whoa_whoa, (VALUE)&go);
 }
 
@@ -486,7 +486,7 @@ sandbox_safe_eval( self, str )
   sandkit *kit;
   Data_Get_Struct( self, sandkit, kit );
   sandbox_begin(kit, &go);
-  go.argv[0] = str;
+  go.argv = &str;
   marshed = rb_ensure(sandbox_safe_go_go_go, (VALUE)&go, sandbox_whoa_whoa_whoa, (VALUE)&go);
   return rb_marshal_load(marshed);
 }
