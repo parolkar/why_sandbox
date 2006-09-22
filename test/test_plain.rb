@@ -59,6 +59,7 @@ class TestPlain < Test::Unit::TestCase
 
   def setup
     @s = Sandbox.new
+    @s.import Sandbox
     @s.eval %{
       class Book
         attr_accessor :author, :title
@@ -71,6 +72,15 @@ class TestPlain < Test::Unit::TestCase
 
   def eval str
     @s.eval str
+  end
+
+  def test_current
+    assert_instance_of Sandbox, Sandbox.current
+  end
+
+  def test_current_nested
+    s = @s.eval "Sandbox.current"
+    assert_equal s, @s
   end
 
   def test_monkeypatch_the_return
