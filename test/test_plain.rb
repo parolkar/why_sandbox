@@ -79,8 +79,8 @@ class TestPlain < Test::Unit::TestCase
   end
 
   def test_current_nested
-    s = @s.eval "Sandbox.current"
-    assert_equal s, @s
+    s = @s.eval "Sandbox.current.object_id"
+    assert_equal s, @s.object_id
   end
 
   def test_monkeypatch_the_return
@@ -119,9 +119,11 @@ class TestPlain < Test::Unit::TestCase
 
   def test_import_paths
     @s.import EmptyClass
+    assert_equal eval("String.object_id"), eval("EmptyClass.name.class.object_id")
     assert_equal EmptyClass.name, eval("EmptyClass.name")
     assert eval("EmptyClass.new.respond_to?(:empty_method)")
     @s.import OneNested::FirstClass
+    assert_equal eval("String.object_id"), eval("OneNested.name.class.object_id")
     assert_equal OneNested.name, eval("OneNested.name")
     assert_equal Module.name, eval("OneNested.class.name")
     assert_equal OneNested::FirstClass.name, eval("OneNested::FirstClass.name")
