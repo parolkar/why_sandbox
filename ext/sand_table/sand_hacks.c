@@ -151,39 +151,6 @@ sandbox_bootclass(kit, name, super)
 }
 
 VALUE
-sandbox_defclass(kit, name, super)
-  sandkit *kit;
-  const char *name;
-  VALUE super;
-{   
-  VALUE klass;
-  ID id;
-
-  id = rb_intern(name);
-  if (rb_const_defined(kit->cObject, id)) {
-    klass = rb_const_get(kit->cObject, id);
-    if (TYPE(klass) != T_CLASS) {
-        rb_raise(rb_eTypeError, "%s is not a class", name);
-    }
-    if (rb_class_real(RCLASS(klass)->super) != super) {
-        rb_name_error(id, "%s is already defined", name);
-    }
-    return klass;
-  }
-  if (!super) {
-    rb_warn("no super class for `%s', Object assumed", name);
-  }
-  klass = sandbox_defclass_id(kit, id, super);
-  st_add_direct(kit->tbl, id, klass);
-  rb_name_class(klass, id);
-  rb_const_set(kit->cObject, id, klass);
-  if (!super) super = kit->cObject;
-  rb_class_inherited(super, klass);
-
-  return klass;
-}
-
-VALUE
 sandbox_defclass_under(kit, outer, name, super)
   sandkit *kit;
   VALUE outer;
@@ -197,7 +164,7 @@ sandbox_defclass_under(kit, outer, name, super)
   if (rb_const_defined_at(outer, id)) {
     klass = rb_const_get_at(outer, id);
     if (TYPE(klass) != T_CLASS) {
-        rb_raise(rb_eTypeError, "%s is not a class", name);
+        rb_raise(rb_eTypeError, "%s is not a class", rb_obj_classname(klass));
     }
     if (rb_class_real(RCLASS(klass)->super) != super) {
         rb_name_error(id, "%s is already defined", name);
@@ -205,11 +172,19 @@ sandbox_defclass_under(kit, outer, name, super)
     return klass;
   }
   if (!super) {
-    rb_warn("no super class for `%s::%s', Object assumed",
-      rb_class2name(outer), name);
+    if (outer == kit->cObject) {
+      rb_warn("no super class for `%s', Object assumed", name);
+    } else {
+      rb_warn("no super class for `%s::%s', Object assumed",
+        rb_class2name(outer), name);
+    }
   }
   klass = sandbox_defclass_id(kit, id, super);
-  rb_set_class_path(klass, outer, name);
+  if (outer == kit->cObject) {
+    st_add_direct(kit->tbl, id, klass);
+  } else {
+    rb_set_class_path(klass, outer, name);
+  }
   rb_const_set(outer, id, klass);
   if (!super) super = kit->cObject;
   rb_class_inherited(super, klass);
@@ -218,25 +193,12 @@ sandbox_defclass_under(kit, outer, name, super)
 }
 
 VALUE
-sandbox_defmodule(kit, name)
+sandbox_defclass(kit, name, super)
   sandkit *kit;
   const char *name;
+  VALUE super;
 {
-  VALUE module;
-  ID id;
-
-  id = rb_intern(name);
-  if (rb_const_defined(kit->cObject, id)) {
-    module = rb_const_get(kit->cObject, id);
-    if (TYPE(module) == T_MODULE)
-        return module;
-    rb_raise(rb_eTypeError, "%s is not a module", rb_obj_classname(module));
-  }
-  module = sandbox_define_module_id(kit, id);
-  st_add_direct(kit->tbl, id, module);
-  rb_const_set(kit->cObject, id, module);
-
-  return module;
+  return sandbox_defclass_under(kit, kit->cObject, name, super);
 }
 
 VALUE
@@ -253,14 +215,25 @@ sandbox_defmodule_under(kit, outer, name)
     module = rb_const_get_at(outer, id);
     if (TYPE(module) == T_MODULE)
       return module;
-    rb_raise(rb_eTypeError, "%s::%s is not a module",
-      rb_class2name(outer), rb_obj_classname(module));
+    rb_raise(rb_eTypeError, "%s is not a module", rb_obj_classname(module));
   }
   module = sandbox_define_module_id(kit, id);
+  if (outer == kit->cObject) {
+    st_add_direct(kit->tbl, id, module);
+  } else {
+    rb_set_class_path(module, outer, name);
+  }
   rb_const_set(outer, id, module);
-  rb_set_class_path(module, outer, name);
 
   return module;
+}
+
+VALUE
+sandbox_defmodule(kit, name)
+  sandkit *kit;
+  const char *name;
+{
+  return sandbox_defmodule_under(kit, kit->cObject, name);
 }
 
 VALUE
@@ -367,10 +340,10 @@ sandbox_import_class_path(kit, path)
       } else {
         switch (TYPE(c)) {
           case T_MODULE:
-            kitc = rb_define_module_under(kitc, rb_str_ptr(str));
+            kitc = sandbox_defmodule_under(kit, kitc, rb_str_ptr(str));
           break;
           case T_CLASS:
-            kitc = rb_define_class_under(kitc, rb_str_ptr(str), super);
+            kitc = sandbox_defclass_under(kit, kitc, rb_str_ptr(str), super);
           break;
         }
       }
