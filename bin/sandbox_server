@@ -1,4 +1,4 @@
-#! /scratch/mental/ruby-sandbox/build/../install/bin/ruby
+#!/usr/bin/env ruby
 require 'optparse'
 require 'ostruct'
 require 'sandbox/server'
