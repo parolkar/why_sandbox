@@ -392,7 +392,7 @@ sandbox_swap(kit, mode)
 }
 
 VALUE
-sandbox_whoa_whoa_whoa(go)
+sandbox_finish(go)
   go_cart *go;
 {
   VALUE exc = go->exception;
@@ -468,7 +468,7 @@ sandbox_eval( self, str )
   Data_Get_Struct( self, sandkit, kit );
   sandbox_begin(kit, &go);
   go.argv = &str;
-  return rb_ensure(sandbox_go_go_go, (VALUE)&go, sandbox_whoa_whoa_whoa, (VALUE)&go);
+  return rb_ensure(sandbox_go_go_go, (VALUE)&go, sandbox_finish, (VALUE)&go);
 }
 
 /*
@@ -507,7 +507,7 @@ sandbox_safe_eval( self, str )
   Data_Get_Struct( self, sandkit, kit );
   sandbox_begin(kit, &go);
   go.argv = &str;
-  marshed = rb_ensure(sandbox_safe_go_go_go, (VALUE)&go, sandbox_whoa_whoa_whoa, (VALUE)&go);
+  marshed = rb_ensure(sandbox_safe_go_go_go, (VALUE)&go, sandbox_finish, (VALUE)&go);
   return rb_marshal_load(marshed);
 }
 
@@ -536,7 +536,7 @@ sandbox_dup_into( kit, obj )
   go_cart go;
   sandbox_begin(kit, &go);
   sandobj = rb_marshal_load(sandobj);
-  sandbox_whoa_whoa_whoa(&go);
+  sandbox_finish(&go);
   return sandobj;
 }
 
@@ -2628,7 +2628,7 @@ Init_kit_prelude(kit)
 #endif
 
   rb_load(prelude, 0);
-  sandbox_whoa_whoa_whoa(&go);
+  sandbox_finish(&go);
 }
 
 void Init_sand_table()
