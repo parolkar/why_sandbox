@@ -431,7 +431,7 @@ sandbox_begin( kit, go )
 }
 
 VALUE
-sandbox_main_eval(go)
+sandbox_inner_eval(go)
   go_cart *go;
 {
   VALUE str = go->argv[0];
@@ -443,7 +443,7 @@ sandbox_main_eval(go)
 }
 
 VALUE
-sandbox_reraise(go, exc)
+sandbox_capture_exception(go, exc)
   go_cart *go;
   VALUE exc;
 {
@@ -452,10 +452,10 @@ sandbox_reraise(go, exc)
 }
 
 VALUE
-sandbox_go_go_go(go)
+sandbox_outer_eval(go)
   go_cart *go;
 {
-  return rb_rescue2(sandbox_main_eval, (VALUE)go, sandbox_reraise, (VALUE)go, rb_cObject, 0);
+  return rb_rescue2(sandbox_inner_eval, (VALUE)go, sandbox_capture_exception, (VALUE)go, rb_cObject, 0);
 }
 
 /* :nodoc: */
@@ -468,7 +468,7 @@ sandbox_eval( self, str )
   Data_Get_Struct( self, sandkit, kit );
   sandbox_begin(kit, &go);
   go.argv = &str;
-  return rb_ensure(sandbox_go_go_go, (VALUE)&go, sandbox_finish, (VALUE)&go);
+  return rb_ensure(sandbox_outer_eval, (VALUE)&go, sandbox_finish, (VALUE)&go);
 }
 
 /*
@@ -490,10 +490,10 @@ sandbox_import( self, klass )
 }
 
 VALUE
-sandbox_safe_go_go_go(go)
+sandbox_safe_outer_eval(go)
   go_cart *go;
 {
-  return rb_marshal_dump(sandbox_go_go_go(go), Qnil);
+  return rb_marshal_dump(sandbox_outer_eval(go), Qnil);
 }
 
 /* :nodoc: */
@@ -507,7 +507,7 @@ sandbox_safe_eval( self, str )
   Data_Get_Struct( self, sandkit, kit );
   sandbox_begin(kit, &go);
   go.argv = &str;
-  marshed = rb_ensure(sandbox_safe_go_go_go, (VALUE)&go, sandbox_finish, (VALUE)&go);
+  marshed = rb_ensure(sandbox_safe_outer_eval, (VALUE)&go, sandbox_finish, (VALUE)&go);
   return rb_marshal_load(marshed);
 }
 
