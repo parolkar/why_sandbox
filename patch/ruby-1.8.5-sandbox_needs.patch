@@ -1,6 +1,6 @@
-diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox_needs/eval.c
---- ruby-1.8.5/eval.c	2006-08-06 21:43:39.000000000 -0800
-+++ ruby-1.8.5-sandbox_needs/eval.c	2006-09-07 02:44:58.000000000 -0800
+diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox/eval.c
+--- ruby-1.8.5/eval.c	Sun Aug  6 21:43:39 2006
++++ ruby-1.8.5-sandbox/eval.c	Sat Sep 23 21:24:30 2006
 @@ -29,11 +29,6 @@
  #endif
  
@@ -32,7 +32,16 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox_needs/eval.c
  #  if !defined(setjmp) && defined(HAVE__SETJMP)
  #    define ruby_setjmp(env) _setjmp(env)
  #    define ruby_longjmp(env,val) _longjmp(env,val)
-@@ -1061,8 +1051,8 @@
+@@ -250,6 +240,8 @@
+ #define SCOPE_SET(f)  (scope_vmode=(f))
+ #define SCOPE_TEST(f) (scope_vmode&(f))
+ 
++VALUE (*ruby_sandbox_save)(struct thread *) = NULL; 
++VALUE (*ruby_sandbox_restore)(struct thread *) = NULL; 
+ NODE* ruby_current_node;
+ int ruby_safe_level = 0;
+ /* safe-level:
+@@ -1061,8 +1053,8 @@
  #define POP_CLASS() ruby_class = _class; \
  } while (0)
  
@@ -43,7 +52,7 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox_needs/eval.c
  #define PUSH_CREF(c) ruby_cref = NEW_NODE(NODE_CREF,(c),0,ruby_cref)
  #define POP_CREF() ruby_cref = ruby_cref->nd_next
  
-@@ -1078,9 +1068,8 @@
+@@ -1078,9 +1070,8 @@
      ruby_scope = _scope;		\
      scope_vmode = SCOPE_PUBLIC
  
@@ -55,7 +64,7 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox_needs/eval.c
  static void scope_dup _((struct SCOPE *));
  
  #define POP_SCOPE() 			\
-@@ -1391,8 +1380,8 @@
+@@ -1391,8 +1382,8 @@
  	rb_call_inits();
  	ruby_class = rb_cObject;
  	ruby_frame->self = ruby_top_self;
@@ -66,7 +75,7 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox_needs/eval.c
  	rb_define_global_const("TOPLEVEL_BINDING", rb_f_binding(ruby_top_self));
  #ifdef __MACOS__
  	_macruby_init();
-@@ -1437,6 +1426,8 @@
+@@ -1437,6 +1428,8 @@
  static int thread_set_raised();
  static int thread_reset_raised();
  
@@ -75,7 +84,7 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox_needs/eval.c
  static VALUE exception_error;
  static VALUE sysstack_error;
  
-@@ -3307,7 +3298,7 @@
+@@ -3307,7 +3300,7 @@
  	    result = rb_eval(self, node->nd_head);
  	}
  	POP_TAG();
@@ -84,7 +93,7 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox_needs/eval.c
  	    VALUE retval = prot_tag->retval; /* save retval */
  	    VALUE errinfo = ruby_errinfo;
  
-@@ -4740,7 +4731,7 @@
+@@ -4740,7 +4733,7 @@
      return Qfalse;
  }
  
@@ -93,7 +102,7 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox_needs/eval.c
  
  NORETURN(static void proc_jump_error(int, VALUE));
  static void
-@@ -5453,7 +5444,9 @@
+@@ -5453,7 +5446,9 @@
      }
      POP_TAG();
      retval = prot_tag ? prot_tag->retval : Qnil;	/* save retval */
@@ -103,7 +112,7 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox_needs/eval.c
      if (prot_tag) return_value(retval);
      if (state) JUMP_TAG(state);
      return result;
-@@ -6797,7 +6790,7 @@
+@@ -6797,7 +6792,7 @@
      ruby_errinfo = Qnil;	/* ensure */
      PUSH_VARS();
      PUSH_CLASS(ruby_wrapper);
@@ -112,7 +121,7 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox_needs/eval.c
      if (!wrap) {
  	rb_secure(4);		/* should alter global state */
  	ruby_class = rb_cObject;
-@@ -9757,13 +9750,6 @@
+@@ -9757,13 +9752,6 @@
  
  extern VALUE rb_last_status;
  
@@ -126,10 +135,12 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox_needs/eval.c
  #define WAIT_FD		(1<<0)
  #define WAIT_SELECT	(1<<1)
  #define WAIT_TIME	(1<<2)
-@@ -9783,68 +9769,10 @@
+@@ -9781,70 +9769,10 @@
+ # endif
+ #endif
  
- /* typedef struct thread * rb_thread_t; */
- 
+-/* typedef struct thread * rb_thread_t; */
+-
 -struct thread {
 -    struct thread *next, *prev;
 -    rb_jmpbuf_t context;
@@ -222,9 +233,9 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox_needs/eval.c
      th->safe = ruby_safe_level;
  
      th->node = ruby_current_node;
-+    if (th->sandbox_save != NULL)
++    if (ruby_sandbox_save != NULL)
 +    {
-+      th->sandbox_save(th);
++      ruby_sandbox_save(th);
 +    }
  }
  
@@ -233,9 +244,9 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox_needs/eval.c
  #endif
  
      rb_trap_immediate = 0;	/* inhibit interrupts from here */
-+    if (th->sandbox_restore != NULL)
++    if (ruby_sandbox_restore != NULL)
 +    {
-+      th->sandbox_restore(th);
++      ruby_sandbox_restore(th);
 +    }
      ruby_frame = th->frame;
      ruby_scope = th->scope;
@@ -283,11 +294,10 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox_needs/eval.c
   */
  
  VALUE
-@@ -11218,17 +11179,30 @@
-     VALUE thread;
+@@ -11219,20 +11180,33 @@
  {
      rb_thread_t th = rb_thread_check(thread);
--
+ 
 -    if (th != curr_thread && th->safe < 4) {
 -	rb_secure(4);
 -    }
@@ -323,23 +333,23 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox_needs/eval.c
      return thread;
  }
  
-@@ -11626,6 +11600,15 @@
+-
+ /*
+  *  call-seq:
+  *     Thread.kill(thread)   => thread
+@@ -11626,6 +11600,11 @@
      th->thgroup = thgroup_default;\
      th->locals = 0;\
      th->thread = 0;\
 +    if (curr_thread == 0) {\
-+      th->sandbox_save = NULL;\
-+      th->sandbox_restore = NULL;\
 +      th->sandbox = Qnil;\
 +    } else {\
-+      th->sandbox_save = curr_thread->sandbox_save;\
-+      th->sandbox_restore = curr_thread->sandbox_restore;\
 +      th->sandbox = curr_thread->sandbox;\
 +    }\
  } while (0)
  
  static rb_thread_t
-@@ -12883,6 +12866,9 @@
+@@ -12883,6 +12862,9 @@
      rb_define_method(rb_cThread, "kill", rb_thread_kill, 0);
      rb_define_method(rb_cThread, "terminate", rb_thread_kill, 0);
      rb_define_method(rb_cThread, "exit", rb_thread_kill, 0);
@@ -349,9 +359,9 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox_needs/eval.c
      rb_define_method(rb_cThread, "value", rb_thread_value, 0);
      rb_define_method(rb_cThread, "status", rb_thread_status, 0);
      rb_define_method(rb_cThread, "join", rb_thread_join_m, -1);
-diff -wur ruby-1.8.5/node.h ruby-1.8.5-sandbox_needs/node.h
---- ruby-1.8.5/node.h	2006-02-13 02:10:53.000000000 -0900
-+++ ruby-1.8.5-sandbox_needs/node.h	2006-09-07 02:31:25.000000000 -0800
+diff -wur ruby-1.8.5/node.h ruby-1.8.5-sandbox/node.h
+--- ruby-1.8.5/node.h	Mon Feb 13 02:10:53 2006
++++ ruby-1.8.5-sandbox/node.h	Sat Sep 23 21:22:38 2006
 @@ -151,6 +151,9 @@
      } u3;
  } NODE;
@@ -362,10 +372,11 @@ diff -wur ruby-1.8.5/node.h ruby-1.8.5-sandbox_needs/node.h
  #define RNODE(obj)  (R_CAST(RNode)(obj))
  
  #define nd_type(n) ((int)(((RNODE(n))->flags>>FL_USHIFT)&0xff))
-@@ -371,6 +374,97 @@
+@@ -370,6 +373,97 @@
+ typedef void (*rb_event_hook_func_t) _((rb_event_t,NODE*,VALUE,ID,VALUE));
  void rb_add_event_hook _((rb_event_hook_func_t,rb_event_t));
  int rb_remove_event_hook _((rb_event_hook_func_t));
- 
++
 +#if defined(HAVE_GETCONTEXT) && defined(HAVE_SETCONTEXT)
 +#include <ucontext.h>
 +#define USE_CONTEXT
@@ -449,20 +460,19 @@ diff -wur ruby-1.8.5/node.h ruby-1.8.5-sandbox_needs/node.h
 +
 +    VALUE thread;
 +
-+    VALUE (*sandbox_save)(struct thread *); 
-+    VALUE (*sandbox_restore)(struct thread *); 
 +    VALUE sandbox;
 +};
 +
++extern VALUE (*ruby_sandbox_save)(struct thread *); 
++extern VALUE (*ruby_sandbox_restore)(struct thread *); 
 +extern rb_thread_t curr_thread;
 +extern rb_thread_t main_thread;
-+
+ 
  #if defined(__cplusplus)
  }  /* extern "C" { */
- #endif
-diff -wur ruby-1.8.5/ruby.h ruby-1.8.5-sandbox_needs/ruby.h
---- ruby-1.8.5/ruby.h	2006-08-06 21:43:42.000000000 -0800
-+++ ruby-1.8.5-sandbox_needs/ruby.h	2006-09-07 02:31:25.000000000 -0800
+diff -wur ruby-1.8.5/ruby.h ruby-1.8.5-sandbox/ruby.h
+--- ruby-1.8.5/ruby.h	Sun Aug  6 21:43:42 2006
++++ ruby-1.8.5-sandbox/ruby.h	Sat Sep 23 21:15:07 2006
 @@ -626,6 +626,7 @@
  RUBY_EXTERN VALUE rb_eRuntimeError;
  RUBY_EXTERN VALUE rb_eSecurityError;
