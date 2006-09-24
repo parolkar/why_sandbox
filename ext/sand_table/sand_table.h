@@ -174,6 +174,7 @@ typedef struct SANDKIT {
   }
 
 VALUE sandbox_module_new(sandkit *);
+VALUE sandbox_perform(sandkit *, VALUE (*)(), VALUE);
 VALUE sandbox_dummy();
 VALUE sandbox_define_module_id(sandkit *, ID);
 VALUE sandbox_boot(sandkit *, VALUE);

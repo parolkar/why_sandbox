@@ -436,6 +436,17 @@ sandbox_begin( kit, go )
 }
 
 VALUE
+sandbox_perform(kit, action, arg)
+  sandkit *kit;
+  VALUE (*action)();
+  VALUE arg;
+{
+  go_cart go;
+  sandbox_begin(kit, &go);
+  return rb_ensure(action, arg, sandbox_finish, (VALUE)&go);
+}
+
+VALUE
 sandbox_inner_eval(go)
   go_cart *go;
 {
