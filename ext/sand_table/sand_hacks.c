@@ -268,16 +268,8 @@ sandbox_str(kit, ptr)
   sandkit *kit;
   const char *ptr;
 {   
-  NEWOBJ(str, struct RString);
-  OBJSETUP(str, kit->cString, T_STRING);
-
-  str->len = strlen(ptr);
-  str->aux.capa = str->len;
-  str->ptr = ALLOC_N(char,str->len+1);
-  memcpy(str->ptr, ptr, str->len);
-  str->ptr[str->len] = '\0';
-
-  return (VALUE)str;
+  VALUE str = rb_obj_alloc(kit->cString);
+  return rb_str_buf_cat2(str, ptr);
 }
 
 void
@@ -289,7 +281,7 @@ sandbox_copy_method(klass, def, oklass)
   int noex;
      
   st_lookup(RCLASS(oklass)->m_tbl, def, (st_data_t *)&body);
-  if (!body) {
+  if (!body || body->nd_body <= (NODE *)1) {
     rb_warn("%s: no method %s found for copying", FREAKYFREAKY, rb_id2name(def));
     return;
   }
@@ -350,7 +342,7 @@ sandbox_import_class_path(kit, path)
 
     while (*p && *p != ':') p++;
     str = rb_str_new(pbeg, p-pbeg);
-    id = rb_intern(RSTRING(str)->ptr);
+    id = rb_to_id(str);
     if (p[0] == ':') {
       if (p[1] != ':') goto undefined_class;
       p += 2;
@@ -366,19 +358,19 @@ sandbox_import_class_path(kit, path)
       if (kitc == kit->cObject) {
         switch (TYPE(c)) {
           case T_MODULE:
-            kitc = sandbox_defmodule(kit, RSTRING(str)->ptr);
+            kitc = sandbox_defmodule(kit, rb_str_ptr(str));
           break;
           case T_CLASS:
-            kitc = sandbox_defclass(kit, RSTRING(str)->ptr, super);
+            kitc = sandbox_defclass(kit, rb_str_ptr(str), super);
           break;
         }
       } else {
         switch (TYPE(c)) {
           case T_MODULE:
-            kitc = rb_define_module_under(kitc, RSTRING(str)->ptr);
+            kitc = rb_define_module_under(kitc, rb_str_ptr(str));
           break;
           case T_CLASS:
-            kitc = rb_define_class_under(kitc, RSTRING(str)->ptr, super);
+            kitc = rb_define_class_under(kitc, rb_str_ptr(str), super);
           break;
         }
       }

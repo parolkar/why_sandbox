@@ -35,6 +35,9 @@ mark_sandbox(kit)
   sandkit *kit;
 {
   rb_mark_tbl(kit->tbl);
+#ifdef KIT2
+  rb_gc_mark_maybe(kit->cBasicObject);
+#endif
   rb_gc_mark_maybe(kit->cObject);
   rb_gc_mark_maybe(kit->cModule);
   rb_gc_mark_maybe(kit->cClass);
@@ -114,7 +117,7 @@ mark_sandbox(kit)
   rb_gc_mark((VALUE)kit->scope);
   rb_gc_mark((VALUE)kit->top_cref);
   rb_gc_mark((VALUE)kit->ruby_cref);
-  rb_gc_mark_maybe(kit->ruby_class);
+  rb_gc_mark_maybe(kit->rclass);
   sandbox_mark_globals(kit->globals);
 }
 
@@ -200,7 +203,8 @@ sandbox_alloc(class)
 
   kit->top_cref = rb_node_newnode(NODE_CREF,kit->cObject,0,0);
   kit->ruby_cref = kit->top_cref;
-  kit->ruby_class = kit->cObject;
+  kit->ruby_cref->nd_clss = kit->cObject;
+  kit->rclass = kit->cObject;
 
   kit->self = Data_Wrap_Struct( class, mark_sandbox, free_sandbox, kit );
   return kit->self;
@@ -242,7 +246,7 @@ sandbox_initialize(argc, argv, self)
     int i;
     int init_load = 0, init_env = 0, init_io = 0, init_real = 0;
     init = rb_Array(init);
-    for ( i = 0; i < RARRAY(init)->len; i++ )
+    for ( i = 0; i < rb_ary_len(init); i++ )
     {
       VALUE mod = rb_ary_entry(init, i);
       if ( mod == Qload ) {
@@ -271,7 +275,7 @@ sandbox_initialize(argc, argv, self)
   {
     int i;
     Check_Type(import, T_ARRAY);
-    for ( i = 0; i < RARRAY(import)->len; i++ )
+    for ( i = 0; i < rb_ary_len(import); i++ )
     {
       rb_funcall(self, rb_intern("import"), 1, rb_ary_entry(import, i));
     }
@@ -307,6 +311,9 @@ sandbox_swap(kit, mode)
 {
   SWAP_VAR(ruby_sandbox, self);
   SWAP_VAR(rb_class_tbl, tbl);
+#ifdef KIT2
+  SWAP(cBasicObject);
+#endif
   SWAP(cObject);
   SWAP(cModule);
   SWAP(cClass);
@@ -374,7 +381,7 @@ sandbox_swap(kit, mode)
   SWAP_VAR(ruby_top_cref, top_cref);
   SWAP_VAR(rb_global_tbl, globals);
   SWAP_VAR(ruby_cref, ruby_cref);
-  SWAP_VAR(ruby_class, ruby_class);
+  // SWAP_VAR(ruby_class, rclass);
   SWAP(cMatch);
   SWAP(cMethod);
   SWAP(cUnboundMethod);
@@ -400,7 +407,7 @@ sandbox_whoa_whoa_whoa(go)
   if (!NIL_P(exc))
   {
     VALUE msg = rb_funcall(exc, rb_intern("message"), 0);
-    rb_raise(rb_eSandboxException, "%s: %s", rb_class2name(rb_obj_class(exc)), RSTRING(msg)->ptr);
+    rb_raise(rb_eSandboxException, "%s: %s", rb_class2name(rb_obj_class(exc)), rb_str_ptr(msg));
   }
 }
 
@@ -432,7 +439,7 @@ sandbox_main_eval(go)
   if (!rb_const_defined(rb_cObject, rb_intern("TOPLEVEL_BINDING"))) {
       rb_const_set(rb_cObject, rb_intern("TOPLEVEL_BINDING"), rb_eval_string("binding"));
   }
-  return rb_eval_string(RSTRING(str)->ptr);
+  return rb_eval_string(rb_str_ptr(str));
 }
 
 VALUE
@@ -581,20 +588,32 @@ Init_kit(kit, use_base)
   kit->globals = st_init_numtable();
   kit->cObject = 0;
 
+#ifdef KIT2
+  kit->cBasicObject = sandbox_bootclass(kit, "BasicObject", 0);
+  kit->cObject = sandbox_bootclass(kit, "Object", kit->cBasicObject);
+#else
   kit->cObject = sandbox_bootclass(kit, "Object", 0);
+#endif
   kit->cModule = sandbox_bootclass(kit, "Module", kit->cObject);
   kit->cClass =  sandbox_bootclass(kit, "Class",  kit->cModule);
 
+#ifdef KIT2
+  metaclass = sandbox_metaclass(kit, kit->cBasicObject, kit->cClass);
+  metaclass = sandbox_metaclass(kit, kit->cObject, metaclass);
+  SAND_COPY(cBasicObject, "==");
+  SAND_COPY(cBasicObject, "equal?");
+#else
   metaclass = sandbox_metaclass(kit, kit->cObject, kit->cClass);
+#endif
   metaclass = sandbox_metaclass(kit, kit->cModule, metaclass);
   metaclass = sandbox_metaclass(kit, kit->cClass, metaclass);
 
   kit->mKernel = sandbox_defmodule(kit, "Kernel");
   rb_include_module(kit->cObject, kit->mKernel);
-  rb_define_alloc_func(kit->cObject, sandbox_alloc_obj);
+  rb_define_alloc_func(kitBasicObject, sandbox_alloc_obj);
 
   rb_define_private_method(kit->cModule, "method_added", sandbox_dummy, 1);
-  rb_define_private_method(kit->cObject, "initialize", sandbox_dummy, 0);
+  rb_define_private_method(kitBasicObject, "initialize", sandbox_dummy, 0);
   rb_define_private_method(kit->cClass, "inherited", sandbox_dummy, 1);
   rb_define_private_method(kit->cModule, "included", sandbox_dummy, 1);
   rb_define_private_method(kit->cModule, "extended", sandbox_dummy, 1);

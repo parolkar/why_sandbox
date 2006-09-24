@@ -27,8 +27,29 @@ extern struct FRAME *ruby_frame;
 extern struct SCOPE *ruby_scope;
 extern st_table *rb_global_tbl;
 
+#ifdef RARRAY_LEN
+#undef T_SYMBOL
+#define T_SYMBOL T_STRING
+static inline long  rb_str_len(VALUE s) {return RSTRING_LEN(s);}                                                               
+static inline char *rb_str_ptr(VALUE s) {return RSTRING_PTR(s);}                                                               
+static inline long  rb_ary_len(VALUE s) {return  RARRAY_LEN(s);}                                                               
+static inline VALUE *rb_ary_ptr(VALUE s) {return  RARRAY_PTR(s);}
+#else                                                                                                                         
+static inline long  rb_str_len(VALUE s) {return RSTRING(s)->len;}                                                              
+static inline char *rb_str_ptr(VALUE s) {return RSTRING(s)->ptr;}                                                              
+static inline long  rb_ary_len(VALUE s) {return  RARRAY(s)->len;}                                                              
+static inline VALUE *rb_ary_ptr(VALUE s) {return  RARRAY(s)->ptr;}                                                              
+#endif 
+
 #if RUBY_VERSION_CODE <= 185
 #warning "** Sandbox will NOT compile without a patched 1.8.5 -- Proceeding anyway! **"
+#endif
+
+#if RUBY_VERSION_CODE > 190
+#define KIT2
+#define kitBasicObject kit->cBasicObject
+#else
+#define kitBasicObject kit->cObject
 #endif
 
 #if defined(__cplusplus)
@@ -41,6 +62,9 @@ typedef struct SANDKIT {
   VALUE self;
   VALUE _progname;
 
+#if KIT2
+  VALUE cBasicObject;
+#endif
   VALUE cObject;
   VALUE cModule;
   VALUE cClass;
@@ -130,7 +154,7 @@ typedef struct SANDKIT {
 
   NODE *top_cref;
   NODE *ruby_cref;
-  VALUE ruby_class;
+  VALUE rclass;
   struct SCOPE *scope;
 } sandkit;
 
