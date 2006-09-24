@@ -291,7 +291,9 @@ typedef struct {
   VALUE exception;
   sandkit *kit;
   VALUE banished;
+  /* hmm, bits from here down are starting to look like struct BLOCK ... */
   struct SCOPE *scope;
+  struct RVarmap *dyna_vars;
 } go_cart;
 
 #define SWAP(N) \
@@ -401,6 +403,7 @@ sandbox_finish(go)
   Data_Get_Struct( go->banished, sandkit, banished );
   sandbox_swap(banished, SANDBOX_REPLACE);
   ruby_scope = go->scope;
+  ruby_dyna_vars = go->dyna_vars;
   curr_thread->sandbox = ruby_sandbox;
   /* printf("WHOAWHOA! %lu -> %lu\n", go->kit->self, go->banished); */
 
@@ -419,11 +422,13 @@ sandbox_begin( kit, go )
   /* save everything */
   go->banished = ruby_sandbox;
   go->scope = ruby_scope;
+  go->dyna_vars = ruby_dyna_vars;
   curr_thread->sandbox = kit->self;
   /* printf("BEGINBEGIN!\n"); */
 
   sandbox_swap(kit, SANDBOX_REPLACE);
   ruby_scope = kit->scope;
+  ruby_dyna_vars = 0;
 
   go->exception = Qnil;
   go->argv = NULL;
