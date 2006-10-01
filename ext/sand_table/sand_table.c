@@ -11,12 +11,12 @@
 
 #define SAND_REV_ID "$Rev$"
 
-static VALUE ruby_sandbox = Qnil;
+VALUE ruby_sandbox = Qnil;
 static sandkit real;
 static sandkit base;
 
-static VALUE Qimport, Qinit, Qload, Qenv, Qio, Qreal, Qall;
-static VALUE rb_cSandbox, rb_cSandboxSafe, rb_eSandboxException;
+static VALUE Qimport, Qinit, Qload, Qenv, Qio, Qreal, Qref, Qall;
+VALUE rb_cSandbox, rb_cSandboxFull, rb_cSandboxSafe, rb_eSandboxException, rb_cSandboxRef;
 static ID s_options;
 
 static void Init_kit _((sandkit *, int));
@@ -112,6 +112,7 @@ mark_sandbox(kit)
   rb_gc_mark_maybe(kit->eLoadError);
   rb_gc_mark_maybe(kit->eLocalJumpError);
   rb_gc_mark_maybe(kit->mErrno);
+  rb_gc_mark_maybe(kit->cBoxedClass);
   rb_gc_mark_maybe(kit->load_path);
   rb_gc_mark_maybe(kit->loaded_features);
   rb_gc_mark((VALUE)kit->scope);
@@ -214,7 +215,7 @@ sandbox_alloc(class)
 
 /*
  *  call-seq:
- *     Sandbox.new(opts={})   => obj
+ *     Sandbox::Full.new(opts={})   => obj
  *
  *  Returns a newly created sandbox; a hash containing default options for
  *  Sandbox#eval in this sandbox may be given in +opts+.  (See Sandbox#eval.)
@@ -227,7 +228,7 @@ sandbox_initialize(argc, argv, self)
   VALUE self;
 {
   sandkit *kit;
-  VALUE opts, import, init;
+  VALUE opts, import, init, ref;
 
   if (rb_scan_args(argc, argv, "01", &opts) == 0)
   {
@@ -281,13 +282,26 @@ sandbox_initialize(argc, argv, self)
     }
   }
 
+  ref = rb_hash_aref(opts, Qref);
+  if (!NIL_P(ref))
+  {
+    int i;
+    Check_Type(import, T_ARRAY);
+    for ( i = 0; i < rb_ary_len(ref); i++ )
+    {
+      rb_funcall(self, rb_intern("ref"), 1, rb_ary_entry(ref, i));
+    }
+  }
+
   rb_ivar_set(self, s_options, opts);
   return self;
 }
 
 /* should be stack-allocated so GC can follow banished and scope pointers */
 typedef struct {
+  int argc;
   VALUE *argv;
+  VALUE link;
   VALUE exception;
   sandkit *kit;
   VALUE banished;
@@ -393,8 +407,41 @@ sandbox_swap(kit, mode)
   SWAP(eLocalJumpError);
 }
 
+/*
+ * Imports an object into a sandbox.  The matching class is found in the
+ * sandbox.  If that class is a BoxedClass, we generate a reference.  Otherwise,
+ * the object is marshalled. NOTE: must be called after sandbox_begin.
+ *
+ * The +kit+ argument refers to the kit that the object originates from.
+ */
 VALUE
-sandbox_finish(go)
+sandbox_obj_ref(kit, obj)
+  sandkit *kit;
+  VALUE obj;
+{
+  VALUE klass = rb_obj_class(obj);
+  if (NIL_P(klass))
+  {
+    rb_raise(rb_eArgError, "no class `%s' in sandbox, cannot import %s", rb_obj_classname(obj), obj);
+  }
+  else
+  {
+    VALUE link = sandbox_get_linked_class(klass);
+    if (NIL_P(link))
+    {
+      obj = rb_marshal_load(rb_marshal_dump(obj, Qnil));
+    }
+    else
+    {
+      VALUE new = rb_funcall(klass, rb_intern("new"), 0);
+      sandbox_link_class(obj, new);
+      return new;
+    }
+  }
+}
+
+VALUE
+sandbox_whoa_whoa_whoa(go)
   go_cart *go;
 {
   VALUE exc = go->exception;
@@ -443,7 +490,7 @@ sandbox_perform(kit, action, arg)
 {
   go_cart go;
   sandbox_begin(kit, &go);
-  return rb_ensure(action, arg, sandbox_finish, (VALUE)&go);
+  return sandbox_obj_ref(kit, rb_ensure(action, arg, sandbox_whoa_whoa_whoa, (VALUE)&go));
 }
 
 VALUE
@@ -468,7 +515,7 @@ sandbox_capture_exception(go, exc)
 }
 
 VALUE
-sandbox_outer_eval(go)
+sandbox_go_go_go(go)
   go_cart *go;
 {
   return rb_rescue2(sandbox_inner_eval, (VALUE)go, sandbox_capture_exception, (VALUE)go, rb_cObject, 0);
@@ -484,7 +531,7 @@ sandbox_eval( self, str )
   Data_Get_Struct( self, sandkit, kit );
   sandbox_begin(kit, &go);
   go.argv = &str;
-  return rb_ensure(sandbox_outer_eval, (VALUE)&go, sandbox_finish, (VALUE)&go);
+  return sandbox_obj_ref(kit, rb_ensure(sandbox_go_go_go, (VALUE)&go, sandbox_whoa_whoa_whoa, (VALUE)&go));
 }
 
 /*
@@ -501,15 +548,32 @@ sandbox_import( self, klass )
   VALUE sandklass;
   sandkit *kit;
   Data_Get_Struct( self, sandkit, kit );
-  sandklass = sandbox_import_class_path( kit, rb_class2name( klass ) );
+  sandklass = sandbox_import_class_path( kit, rb_class2name( klass ), 0 );
+  return Qnil;
+}
+
+/*
+ *  call-seq:
+ *     sandbox.ref(class)   => nil
+ *
+ *  References top-level +class+ in the +sandbox+.
+ *
+ */
+VALUE
+sandbox_ref( self, klass )
+  VALUE self, klass;
+{
+  sandkit *kit;
+  Data_Get_Struct( self, sandkit, kit );
+  sandbox_import_class_path( kit, rb_class2name( klass ), 1 );
   return Qnil;
 }
 
 VALUE
-sandbox_safe_outer_eval(go)
+sandbox_safe_go_go_go(go)
   go_cart *go;
 {
-  return rb_marshal_dump(sandbox_outer_eval(go), Qnil);
+  return rb_marshal_dump(sandbox_go_go_go(go), Qnil);
 }
 
 /* :nodoc: */
@@ -523,7 +587,7 @@ sandbox_safe_eval( self, str )
   Data_Get_Struct( self, sandkit, kit );
   sandbox_begin(kit, &go);
   go.argv = &str;
-  marshed = rb_ensure(sandbox_safe_outer_eval, (VALUE)&go, sandbox_finish, (VALUE)&go);
+  marshed = rb_ensure(sandbox_safe_go_go_go, (VALUE)&go, sandbox_whoa_whoa_whoa, (VALUE)&go);
   return rb_marshal_load(marshed);
 }
 
@@ -552,8 +616,31 @@ sandbox_dup_into( kit, obj )
   go_cart go;
   sandbox_begin(kit, &go);
   sandobj = rb_marshal_load(sandobj);
-  sandbox_finish(&go);
+  sandbox_whoa_whoa_whoa(&go);
   return sandobj;
+}
+
+/*
+ *  call-seq:
+ *     Sandbox.new(opts={})   => obj
+ *
+ *  Returns a new Sandbox::Full.  (An alias for Sandbox::Full.new.)
+ *
+ */
+VALUE sandbox_new( argc, argv, self )
+  int argc;
+  VALUE *argv;
+  VALUE self;
+{
+  VALUE opts;
+  if (rb_scan_args(argc, argv, "01", &opts) == 0)
+  {
+    return rb_funcall( rb_cSandboxFull, rb_intern("new"), 0 );
+  }
+  else
+  {
+    return rb_funcall( rb_cSandboxFull, rb_intern("new"), 1, opts );
+  }
 }
 
 /*
@@ -591,6 +678,49 @@ VALUE sandbox_current( self )
   VALUE self;
 {
   return ruby_sandbox;
+}
+
+VALUE
+sandbox_boxedclass_funcall(go)
+  go_cart *go;
+{
+  return rb_funcall2(go->link, SYM2ID(go->argv[0]), go->argc - 1, &go->argv[1]);
+}
+
+VALUE
+sandbox_boxedclass_go(go)
+  go_cart *go;
+{
+  return rb_rescue2(sandbox_boxedclass_funcall, (VALUE)go, sandbox_capture_exception, (VALUE)go, rb_cObject, 0);
+}
+
+static VALUE
+sandbox_boxedclass_method_missing(argc, argv, self)
+  int argc;
+  VALUE *argv;
+  VALUE self;
+{
+  VALUE link = sandbox_get_linked_class(self);
+  if (NIL_P(link)) {
+    /* FIXME: oh, wait, this shouldn't happen! */
+    rb_raise(rb_eNoMethodError, "no link for %s", self);
+  } else {
+    int i;
+    go_cart go;
+    sandkit *kit;
+    VALUE obj;
+    VALUE box = sandbox_get_linked_box(self);
+    Data_Get_Struct(box, sandkit, kit);
+    sandbox_begin(kit, &go);
+    for (i = 0; i < argc; i++) {
+      argv[i] = sandbox_obj_ref(go.banished, argv[i]);
+    }
+    go.argc = argc;
+    go.argv = argv;
+    go.link = link;
+    obj = rb_ensure(sandbox_boxedclass_go, (VALUE)&go, sandbox_whoa_whoa_whoa, (VALUE)&go);
+    return sandbox_obj_ref(kit, obj);
+  }
 }
 
 static void
@@ -729,7 +859,7 @@ Init_kit(kit, use_base)
   SAND_COPY(cModule, "to_s");
   SAND_COPY(cModule, "included_modules");
   SAND_COPY(cModule, "include?");
-  SAND_COPY(cModule, "name");
+  rb_define_method(kit->cModule, "name", sandbox_mod_name, 0);
   SAND_COPY(cModule, "ancestors");
 
   SAND_COPY(cModule, "attr");
@@ -1862,6 +1992,11 @@ Init_kit(kit, use_base)
   kit->loaded_features = rb_funcall(kit->cArray, rb_intern("new"), 0);
   kit->_progname = sandbox_str(kit, "(sandbox)");
   sandbox_define_hooked_variable(kit, "$0", &kit->_progname, 0, 0);
+
+  /* BoxedClass hooks */
+  kit->cBoxedClass = sandbox_defclass(kit, "BoxedClass", kit->cObject);
+  rb_define_singleton_method( kit->cBoxedClass, "method_missing", sandbox_boxedclass_method_missing, -1 );
+  rb_define_method( kit->cBoxedClass, "method_missing", sandbox_boxedclass_method_missing, -1 );
 }
 
 static void
@@ -2644,7 +2779,7 @@ Init_kit_prelude(kit)
 #endif
 
   rb_load(prelude, 0);
-  sandbox_finish(&go);
+  sandbox_whoa_whoa_whoa(&go);
 }
 
 void Init_sand_table()
@@ -2658,23 +2793,25 @@ void Init_sand_table()
   Init_kit_env(&base, 0);
   Init_kit_real(&base, 0);
 
-  rb_cSandbox = rb_define_class("Sandbox", rb_cObject);
-  /* :nodoc: */
+  rb_cSandbox = rb_define_module("Sandbox");
+  rb_cSandboxFull = rb_define_class_under(rb_cSandbox, "Full", rb_cObject);
   rb_define_const( rb_cSandbox, "VERSION", rb_str_new2( SAND_VERSION ) );
-  /* :nodoc: */
   rb_define_const( rb_cSandbox, "REV_ID", rb_str_new2( SAND_REV_ID ) );
-  rb_define_alloc_func( rb_cSandbox, sandbox_alloc );
+  rb_define_alloc_func( rb_cSandboxFull, sandbox_alloc );
   /* Default options for Sandbox#eval in this sandbox. (See Sandbox.new.) */
-  rb_define_attr( rb_cSandbox, "options", 1, 0 );
-  rb_define_method( rb_cSandbox, "initialize", sandbox_initialize, -1 );
-  rb_define_method( rb_cSandbox, "_eval", sandbox_eval, 1 );
-  rb_define_method( rb_cSandbox, "import", sandbox_import, 1 );
-  rb_define_method( rb_cSandbox, "main", sandbox_get_main, 0 );
+  rb_define_attr( rb_cSandboxFull, "options", 1, 0 );
+  rb_define_method( rb_cSandboxFull, "initialize", sandbox_initialize, -1 );
+  rb_define_method( rb_cSandboxFull, "_eval", sandbox_eval, 1 );
+  rb_define_method( rb_cSandboxFull, "import", sandbox_import, 1 );
+  rb_define_method( rb_cSandboxFull, "ref", sandbox_ref, 1 );
+  rb_define_method( rb_cSandboxFull, "main", sandbox_get_main, 0 );
+  rb_define_singleton_method( rb_cSandbox, "new", sandbox_new, -1 );
   rb_define_singleton_method( rb_cSandbox, "safe", sandbox_safe, -1 );
   rb_define_singleton_method( rb_cSandbox, "current", sandbox_current, 0 );
-  rb_cSandboxSafe = rb_define_class_under(rb_cSandbox, "Safe", rb_cSandbox);
+  rb_cSandboxSafe = rb_define_class_under(rb_cSandbox, "Safe", rb_cSandboxFull);
   rb_define_method( rb_cSandboxSafe, "_eval", sandbox_safe_eval, 1 );
   rb_eSandboxException = rb_define_class_under(rb_cSandbox, "Exception", rb_eException);
+  rb_cSandboxRef = rb_define_class_under(rb_cSandbox, "Ref", rb_cObject);
 
   s_options = rb_intern("@options");
   Qinit = ID2SYM(rb_intern("init"));
@@ -2682,6 +2819,7 @@ void Init_sand_table()
   Qload = ID2SYM(rb_intern("load"));
   Qenv = ID2SYM(rb_intern("env"));
   Qreal = ID2SYM(rb_intern("real"));
+  Qref = ID2SYM(rb_intern("ref"));
   Qio = ID2SYM(rb_intern("io"));
   Qall = ID2SYM(rb_intern("all"));
 
@@ -2689,7 +2827,7 @@ void Init_sand_table()
   rb_global_variable(&real.self);
   sandbox_swap(&real, SANDBOX_STORE);
   real.scope = alloc_scope();
-  real.self = Data_Wrap_Struct( rb_cSandbox, mark_sandbox, NULL, &real );
+  real.self = Data_Wrap_Struct( rb_cSandboxFull, mark_sandbox, NULL, &real );
   ruby_sandbox = real.self;
   rb_ivar_set(real.self, s_options, rb_hash_new());
 }

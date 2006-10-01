@@ -75,7 +75,7 @@ class TestPlain < Test::Unit::TestCase
   end
 
   def test_current
-    assert_instance_of Sandbox, Sandbox.current
+    assert_instance_of Sandbox::Full, Sandbox.current
   end
 
   def test_current_nested

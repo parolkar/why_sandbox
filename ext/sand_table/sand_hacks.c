@@ -11,6 +11,15 @@
 #include "sand_table.h"
  
 VALUE
+sandbox_str(kit, ptr)
+  sandkit *kit;
+  const char *ptr;
+{   
+  VALUE str = rb_obj_alloc(kit->cString);
+  return rb_str_buf_cat2(str, ptr);
+}
+
+VALUE
 sandbox_module_new(kit)
   sandkit *kit;
 {
@@ -42,6 +51,14 @@ sandbox_define_module_id(kit, id)
   rb_name_class(mdl, id);
 
   return mdl;
+}
+
+VALUE
+sandbox_mod_name(mod)
+  VALUE mod;
+{   
+  VALUE str = rb_obj_alloc(rb_cString);
+  return rb_str_buf_append(str, rb_mod_name(mod));
 }
 
 VALUE
@@ -236,15 +253,6 @@ sandbox_defmodule(kit, name)
   return sandbox_defmodule_under(kit, kit->cObject, name);
 }
 
-VALUE
-sandbox_str(kit, ptr)
-  sandkit *kit;
-  const char *ptr;
-{   
-  VALUE str = rb_obj_alloc(kit->cString);
-  return rb_str_buf_cat2(str, ptr);
-}
-
 void
 sandbox_copy_method(klass, def, oklass)
   VALUE klass, oklass;
@@ -279,6 +287,39 @@ sandbox_copy_method_i(name, type, argv)
 }
 
 void
+sandbox_link_class(c, kitc)
+  VALUE c, kitc;
+{
+  if (!ROBJECT(kitc)->iv_tbl) {
+    ROBJECT(kitc)->iv_tbl = st_init_numtable();
+  }
+  st_insert(ROBJECT(kitc)->iv_tbl, rb_intern("__link__"), c);
+  st_insert(ROBJECT(kitc)->iv_tbl, rb_intern("__box__"), ruby_sandbox);
+}
+
+VALUE
+sandbox_get_linked_class(kitc)
+  VALUE kitc;
+{
+  VALUE c = Qnil;
+  if (ROBJECT(kitc)->iv_tbl) {
+    st_lookup(ROBJECT(kitc)->iv_tbl, rb_intern("__link__"), &c);
+  }
+  return c;
+}
+
+VALUE
+sandbox_get_linked_box(kitc)
+  VALUE kitc;
+{
+  VALUE c = Qnil;
+  if (ROBJECT(kitc)->iv_tbl) {
+    st_lookup(ROBJECT(kitc)->iv_tbl, rb_intern("__box__"), &c);
+  }
+  return c;
+}
+
+void
 sandbox_foreach_method(mod_from, mod_to, func)
   VALUE mod_from, mod_to;
   int (*func) _((ID, long, VALUE *));
@@ -297,9 +338,10 @@ sandbox_foreach_method(mod_from, mod_to, func)
 }
 
 VALUE
-sandbox_import_class_path(kit, path)
+sandbox_import_class_path(kit, path, link)
   sandkit *kit;
   const char *path;
+  unsigned char link;
 {
   const char *pbeg, *p;
   ID id;
@@ -327,7 +369,10 @@ sandbox_import_class_path(kit, path)
     }
     c = rb_const_get_at(c, id);
     if (!rb_const_defined(kitc, id)) {
-      VALUE super = sandbox_import_class_path(kit, rb_class2name(RCLASS(c)->super));
+      VALUE super = kit->cBoxedClass;
+      if (!link) {
+        super = sandbox_import_class_path(kit, rb_class2name(RCLASS(c)->super), link);
+      }
       if (kitc == kit->cObject) {
         switch (TYPE(c)) {
           case T_MODULE:
@@ -352,12 +397,16 @@ sandbox_import_class_path(kit, path)
     }
     switch (TYPE(c)) {
       case T_CLASS:
-        if (0 != rb_str_cmp(rb_class_name(RCLASS(c)->super), rb_class_name(RCLASS(kitc)->super)))
+        if (!link && 0 != rb_str_cmp(rb_class_name(RCLASS(c)->super), rb_class_name(RCLASS(kitc)->super)))
         {
           rb_raise(rb_eTypeError, "superclass mismatch for class %s", rb_class2name(RCLASS(c)->super));
         }
       case T_MODULE:
-        sandbox_foreach_method(c, kitc, sandbox_copy_method_i); 
+        if (!link) {
+          sandbox_foreach_method(c, kitc, sandbox_copy_method_i); 
+        } else {
+          sandbox_link_class(c, kitc);
+        }
         break;
       default:
         rb_raise(rb_eTypeError, "%s does not refer class/module", path);

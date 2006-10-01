@@ -21,6 +21,7 @@
 #include <node.h>
 #include <version.h>
 
+extern VALUE ruby_sandbox;
 extern st_table *rb_class_tbl;
 extern VALUE ruby_top_self;
 extern struct FRAME *ruby_frame;
@@ -144,6 +145,7 @@ typedef struct SANDKIT {
   VALUE eLoadError;
   VALUE eLocalJumpError;
   VALUE mErrno;
+  VALUE cBoxedClass;
 
   VALUE load_path;
   VALUE loaded_features;
@@ -174,6 +176,7 @@ typedef struct SANDKIT {
   }
 
 VALUE sandbox_module_new(sandkit *);
+VALUE sandbox_mod_name(VALUE mod);
 VALUE sandbox_perform(sandkit *, VALUE (*)(), VALUE);
 VALUE sandbox_dummy();
 VALUE sandbox_define_module_id(sandkit *, ID);
@@ -183,8 +186,10 @@ VALUE sandbox_singleton_class(sandkit *, VALUE);
 VALUE sandbox_defclass(sandkit *, const char *, VALUE);
 VALUE sandbox_defmodule(sandkit *, const char *);
 void sandbox_copy_method(VALUE, VALUE, ID);
+VALUE sandbox_get_linked_class(VALUE);
+VALUE sandbox_get_linked_box(VALUE);
 void sandbox_foreach_method(VALUE, VALUE, int (*)(ID, long, VALUE *));
-VALUE sandbox_import_class_path(sandkit *, const char *);
+VALUE sandbox_import_class_path(sandkit *, const char *, unsigned char);
 void sandbox_define_hooked_variable(sandkit *kit, const char *, VALUE *, VALUE (*)(), void (*)());
 void sandbox_define_variable(sandkit *kit, const char *, VALUE *);
 void sandbox_define_readonly_variable(sandkit *, const char  *, VALUE *);
