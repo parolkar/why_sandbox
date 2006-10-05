@@ -585,25 +585,6 @@ sandbox_ref( self, klass )
   return Qnil;
 }
 
-VALUE
-sandbox_safe_go_go_go(str)
-  VALUE str;
-{
-  return rb_marshal_dump(sandbox_go_go_go(str), Qnil);
-}
-
-/* :nodoc: */
-VALUE
-sandbox_safe_eval( self, str )
-  VALUE self, str;
-{
-  VALUE marshed;
-  sandkit *kit;
-  Data_Get_Struct( self, sandkit, kit );
-  marshed = sandbox_perform(kit, sandbox_safe_go_go_go, str);
-  return rb_marshal_load(marshed);
-}
-
 /*
  *  call-seq:
  *     sandbox.main   => obj
@@ -2829,7 +2810,6 @@ void Init_sand_table()
   rb_define_singleton_method( rb_cSandbox, "safe", sandbox_safe, -1 );
   rb_define_singleton_method( rb_cSandbox, "current", sandbox_current, 0 );
   rb_cSandboxSafe = rb_define_class_under(rb_cSandbox, "Safe", rb_cSandboxFull);
-  rb_define_method( rb_cSandboxSafe, "_eval", sandbox_safe_eval, 1 );
   rb_eSandboxException = rb_define_class_under(rb_cSandbox, "Exception", rb_eException);
   rb_cSandboxRef = rb_define_class_under(rb_cSandbox, "Ref", rb_cObject);
 
