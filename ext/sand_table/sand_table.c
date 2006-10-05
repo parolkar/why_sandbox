@@ -26,6 +26,12 @@ static void Init_kit_env _((sandkit *, int));
 static void Init_kit_real _((sandkit *, int));
 static void Init_kit_prelude _((sandkit *));
 void sandbox_swap(sandkit *kit, int mode);
+static VALUE sandbox_perform_raw _((sandkit *, VALUE (*)(), VALUE));
+
+typedef struct {
+  VALUE (*f)();
+  VALUE data;
+} mini_closure;
 
 #define SANDBOX_STORE 1
 #define SANDBOX_REPLACE 2
@@ -483,29 +489,6 @@ sandbox_begin( kit, go )
 }
 
 VALUE
-sandbox_perform(kit, action, arg)
-  sandkit *kit;
-  VALUE (*action)();
-  VALUE arg;
-{
-  go_cart go;
-  sandbox_begin(kit, &go);
-  return sandbox_obj_ref(kit, rb_ensure(action, arg, sandbox_whoa_whoa_whoa, (VALUE)&go));
-}
-
-VALUE
-sandbox_inner_eval(go)
-  go_cart *go;
-{
-  VALUE str = go->argv[0];
-  StringValue(str);
-  if (!rb_const_defined(rb_cObject, rb_intern("TOPLEVEL_BINDING"))) {
-      rb_const_set(rb_cObject, rb_intern("TOPLEVEL_BINDING"), rb_eval_string("binding"));
-  }
-  return rb_eval_string(rb_str_ptr(str));
-}
-
-VALUE
 sandbox_capture_exception(go, exc)
   go_cart *go;
   VALUE exc;
@@ -514,11 +497,47 @@ sandbox_capture_exception(go, exc)
   return Qnil;
 }
 
-VALUE
-sandbox_go_go_go(go)
-  go_cart *go;
+static VALUE
+sandbox_perform_inner(value)
+  VALUE value;
 {
-  return rb_rescue2(sandbox_inner_eval, (VALUE)go, sandbox_capture_exception, (VALUE)go, rb_cObject, 0);
+  go_cart *go=(go_cart *)value;
+  mini_closure *closure=(mini_closure *)go->argv[0];
+  return rb_rescue2(closure->f, closure->data, sandbox_capture_exception, (VALUE)go, rb_cObject, 0);
+}
+
+static VALUE
+sandbox_perform_raw(kit, action, arg)
+  sandkit *kit;
+  VALUE (*action)();
+  VALUE arg;
+{
+  mini_closure closure={ action, arg };
+  VALUE temp=(VALUE)&closure;
+  go_cart go;
+  sandbox_begin(kit, &go);
+  go.argv = &temp;
+  return rb_ensure(sandbox_perform_inner, (VALUE)&go, sandbox_whoa_whoa_whoa, (VALUE)&go);
+}
+
+VALUE
+sandbox_perform(kit, action, arg)
+  sandkit *kit;
+  VALUE (*action)();
+  VALUE arg;
+{
+  return sandbox_obj_ref(kit, sandbox_perform_raw(kit, action, arg));
+}
+
+VALUE
+sandbox_go_go_go(str)
+  VALUE str;
+{
+  StringValue(str);
+  if (!rb_const_defined(rb_cObject, rb_intern("TOPLEVEL_BINDING"))) {
+      rb_const_set(rb_cObject, rb_intern("TOPLEVEL_BINDING"), rb_eval_string("binding"));
+  }
+  return rb_eval_string(rb_str_ptr(str));
 }
 
 /* :nodoc: */
@@ -526,12 +545,9 @@ VALUE
 sandbox_eval( self, str )
   VALUE self, str;
 {
-  go_cart go;
   sandkit *kit;
   Data_Get_Struct( self, sandkit, kit );
-  sandbox_begin(kit, &go);
-  go.argv = &str;
-  return sandbox_obj_ref(kit, rb_ensure(sandbox_go_go_go, (VALUE)&go, sandbox_whoa_whoa_whoa, (VALUE)&go));
+  return sandbox_perform(kit, sandbox_go_go_go, (VALUE)str);
 }
 
 /*
@@ -570,10 +586,10 @@ sandbox_ref( self, klass )
 }
 
 VALUE
-sandbox_safe_go_go_go(go)
-  go_cart *go;
+sandbox_safe_go_go_go(str)
+  VALUE str;
 {
-  return rb_marshal_dump(sandbox_go_go_go(go), Qnil);
+  return rb_marshal_dump(sandbox_go_go_go(str), Qnil);
 }
 
 /* :nodoc: */
@@ -582,12 +598,9 @@ sandbox_safe_eval( self, str )
   VALUE self, str;
 {
   VALUE marshed;
-  go_cart go;
   sandkit *kit;
   Data_Get_Struct( self, sandkit, kit );
-  sandbox_begin(kit, &go);
-  go.argv = &str;
-  marshed = rb_ensure(sandbox_safe_go_go_go, (VALUE)&go, sandbox_whoa_whoa_whoa, (VALUE)&go);
+  marshed = sandbox_perform(kit, sandbox_safe_go_go_go, str);
   return rb_marshal_load(marshed);
 }
 
@@ -612,12 +625,7 @@ sandbox_dup_into( kit, obj )
   sandkit *kit;
   VALUE obj;
 {
-  VALUE sandobj = rb_marshal_dump(obj, Qnil);
-  go_cart go;
-  sandbox_begin(kit, &go);
-  sandobj = rb_marshal_load(sandobj);
-  sandbox_whoa_whoa_whoa(&go);
-  return sandobj;
+  return sandbox_perform_raw(kit, rb_marshal_load, rb_marshal_dump(obj, Qnil));
 }
 
 /*
@@ -2764,22 +2772,34 @@ Init_kit_real(kit, use_base)
   SAND_COPY_CONST(cObject, "PLATFORM");
 }
 
+typedef struct {
+  sandkit *kit;
+  VALUE prelude;
+} Init_kit_prelude_args;
+
+static VALUE
+Init_kit_prelude_inner(value)
+  VALUE value;
+{
+  Init_kit_prelude_args *args=(Init_kit_prelude_args *)value;
+#if defined(HAVE_TIMES) || defined(_WIN32)
+  if (args->kit->mProcess != 0) {
+    args->kit->sTms = rb_struct_define("Tms", "utime", "stime", "cutime", "cstime", NULL);
+  }
+#endif
+  rb_load(args->prelude, 0);
+  return Qnil;
+}
+
 static void
 Init_kit_prelude(kit)
   sandkit *kit;
 {
-  go_cart go;
-  VALUE prelude = rb_const_get(rb_cSandbox, rb_intern("PRELUDE"));
-  StringValue(prelude);
-  sandbox_begin(kit, &go);
-#if defined(HAVE_TIMES) || defined(_WIN32)
-  if (kit->mProcess != 0) {
-    kit->sTms = rb_struct_define("Tms", "utime", "stime", "cutime", "cstime", NULL);
-  }
-#endif
-
-  rb_load(prelude, 0);
-  sandbox_whoa_whoa_whoa(&go);
+  Init_kit_prelude_args args;
+  args.kit = kit;
+  args.prelude = rb_const_get(rb_cSandbox, rb_intern("PRELUDE"));
+  StringValue(args.prelude);
+  sandbox_perform_raw(kit, Init_kit_prelude_inner, (VALUE)&args);
 }
 
 void Init_sand_table()
