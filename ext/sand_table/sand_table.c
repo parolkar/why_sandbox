@@ -19,6 +19,10 @@ static VALUE Qimport, Qinit, Qload, Qenv, Qio, Qreal, Qref, Qall;
 VALUE rb_cSandbox, rb_cSandboxFull, rb_cSandboxSafe, rb_eSandboxException, rb_cSandboxRef;
 static ID s_options;
 
+static VALUE sandbox_run_begin(VALUE wick);
+static VALUE sandbox_run_wick(VALUE v);
+static VALUE sandbox_run_rescue(VALUE v, VALUE exc);
+static VALUE sandbox_run_ensure(VALUE v);
 static void Init_kit _((sandkit *, int));
 static void Init_kit_load _((sandkit *, int));
 static void Init_kit_io _((sandkit *, int));
@@ -26,7 +30,6 @@ static void Init_kit_env _((sandkit *, int));
 static void Init_kit_real _((sandkit *, int));
 static void Init_kit_prelude _((sandkit *));
 void sandbox_swap(sandkit *kit, int mode);
-static VALUE sandbox_perform_raw _((sandkit *, VALUE (*)(), VALUE));
 
 typedef struct {
   VALUE (*f)();
@@ -303,18 +306,102 @@ sandbox_initialize(argc, argv, self)
   return self;
 }
 
-/* should be stack-allocated so GC can follow banished and scope pointers */
+#define TRANS_NONE    40
+#define TRANS_MARSHAL 41
+#define TRANS_LINK    42
+
+/* Simple struct for dealing with the arg transfer. */
 typedef struct {
+  VALUE val;
+  char trans;
+} sandtransfer;
+
+/*
+ * A "wick" for starting a sandbox that calls
+ * a method of a linked object inside that same
+ * sandbox.
+ */
+sandwick *
+sandbox_method_wick(link, argc, argv)
+  VALUE link;
   int argc;
   VALUE *argv;
+{
+  sandwick *wick = ALLOC(sandwick);
+  wick->calltype = SANDBOX_METHOD_CALL;
+  wick->action = NULL;
+  wick->link = link;
+  wick->argc = argc;
+  wick->argv = argv;
+  return wick;
+}
+
+/*
+ * Runs the method call action.
+ */
+static VALUE
+sandbox_run_method_call(wick)
+  sandwick *wick;
+{
+  return rb_funcall2(wick->link, SYM2ID(wick->argv[0]), wick->argc - 1, &wick->argv[1]);
+}
+
+/*
+ * A "wick" for evaling a string inside the
+ * sandbox.
+ */
+sandwick *
+sandbox_eval_wick(str)
+  VALUE str;
+{
+  sandwick *wick = ALLOC(sandwick);
+  wick->calltype = SANDBOX_EVAL;
+  wick->action = NULL;
+  wick->link = str;
+  wick->argc = 0;
+  wick->argv = NULL;
+  return wick;
+}
+
+/* 
+ * Runs the eval action.
+ */
+static VALUE
+sandbox_run_eval(wick)
+  sandwick *wick;
+{
+  VALUE str = wick->link;
+  StringValue(str);
+  return rb_eval_string(rb_str_ptr(str));
+}
+
+/*
+ * A "wick" for running a C callback
+ * inside the sandbox.
+ */
+sandwick *
+sandbox_action_wick(action, link)
+  VALUE (*action)();
   VALUE link;
-  VALUE exception;
-  sandkit *kit;
-  VALUE banished;
-  /* hmm, bits from here down are starting to look like struct BLOCK ... */
-  struct SCOPE *scope;
-  struct RVarmap *dyna_vars;
-} go_cart;
+{
+  sandwick *wick = ALLOC(sandwick);
+  wick->calltype = SANDBOX_ACTION;
+  wick->action = action;
+  wick->link = link;
+  wick->argc = 0;
+  wick->argv = NULL;
+  return wick;
+}
+
+/* 
+ * Runs the callback action.
+ */
+static VALUE
+sandbox_run_action(wick)
+  sandwick *wick;
+{
+  return wick->action(wick->link);
+}
 
 #define SWAP(N) \
   if (mode == SANDBOX_STORE) kit->N = rb_##N; \
@@ -414,68 +501,17 @@ sandbox_swap(kit, mode)
 }
 
 /*
- * Imports an object into a sandbox.  The matching class is found in the
- * sandbox.  If that class is a BoxedClass, we generate a reference.  Otherwise,
- * the object is marshalled. NOTE: must be called after sandbox_begin.
- *
- * The +kit+ argument refers to the kit that the object originates from.
+ * Swaps in the sandbox, turns it "on".
  */
-VALUE
-sandbox_obj_ref(kit, obj)
-  sandkit *kit;
-  VALUE obj;
-{
-  VALUE klass = rb_obj_class(obj);
-  if (NIL_P(klass))
-  {
-    rb_raise(rb_eArgError, "no class `%s' in sandbox, cannot import %s", rb_obj_classname(obj), obj);
-  }
-  else
-  {
-    VALUE link = sandbox_get_linked_class(klass);
-    if (NIL_P(link))
-    {
-      obj = rb_marshal_load(rb_marshal_dump(obj, Qnil));
-    }
-    else
-    {
-      VALUE new = rb_funcall(klass, rb_intern("new"), 0);
-      sandbox_link_class(obj, new);
-      return new;
-    }
-  }
-}
-
-VALUE
-sandbox_whoa_whoa_whoa(go)
-  go_cart *go;
-{
-  VALUE exc = go->exception;
-  sandkit *banished;
-
-  Data_Get_Struct( go->banished, sandkit, banished );
-  sandbox_swap(banished, SANDBOX_REPLACE);
-  ruby_scope = go->scope;
-  ruby_dyna_vars = go->dyna_vars;
-  curr_thread->sandbox = ruby_sandbox;
-  /* printf("WHOAWHOA! %lu -> %lu\n", go->kit->self, go->banished); */
-
-  if (!NIL_P(exc))
-  {
-    VALUE msg = rb_funcall(exc, rb_intern("message"), 0);
-    rb_raise(rb_eSandboxException, "%s: %s", rb_class2name(rb_obj_class(exc)), rb_str_ptr(msg));
-  }
-}
-
 void
-sandbox_begin( kit, go )
+sandbox_on( kit, wick )
   sandkit *kit;
-  go_cart *go;
+  sandwick *wick;
 {
   /* save everything */
-  go->banished = ruby_sandbox;
-  go->scope = ruby_scope;
-  go->dyna_vars = ruby_dyna_vars;
+  wick->banished = ruby_sandbox;
+  wick->scope = ruby_scope;
+  wick->dyna_vars = ruby_dyna_vars;
   curr_thread->sandbox = kit->self;
   /* printf("BEGINBEGIN!\n"); */
 
@@ -483,61 +519,206 @@ sandbox_begin( kit, go )
   ruby_scope = kit->scope;
   ruby_dyna_vars = 0;
 
-  go->exception = Qnil;
-  go->argv = NULL;
-  go->kit = kit;
+  wick->exception = Qnil;
+  wick->kit = kit;
 }
 
-VALUE
-sandbox_capture_exception(go, exc)
-  go_cart *go;
-  VALUE exc;
+/*
+ * Swaps out the sandbox, turns it "off".
+ */
+void
+sandbox_off( wick )
+  sandwick *wick;
 {
-  go->exception = exc;
+  sandkit *banished;
+
+  Data_Get_Struct( wick->banished, sandkit, banished );
+  sandbox_swap(banished, SANDBOX_REPLACE);
+  ruby_scope = wick->scope;
+  ruby_dyna_vars = wick->dyna_vars;
+  curr_thread->sandbox = ruby_sandbox;
+  /* printf("WHOAWHOA! %lu -> %lu\n", wick->kit->self, wick->banished); */
+}
+
+/*
+ * Imports an object into a sandbox.  The matching class is found in the
+ * sandbox.  If that class is a BoxedClass, we generate a reference.  Otherwise,
+ * the object is marshalled. NOTE: This gets called before sandbox_on, then
+ * sandbox_arg_load gets called on each.
+ *
+ * The +kit+ argument refers to the kit that the arg is being prepared for.
+ */
+static VALUE
+sandbox_arg_prep(kit, obj)
+  sandkit *kit;
+  VALUE obj;
+{
+  sandtransfer *t = ALLOC(sandtransfer);
+  t->trans = TRANS_NONE;
+  if (SPECIAL_CONST_P(obj))
+  {
+    t->val = obj;
+    return (VALUE)t;
+  }
+
+  VALUE link = sandbox_get_linked_class(obj);
+  if (!NIL_P(link))
+  {
+    VALUE box = sandbox_get_linked_box(obj);
+    if (box == kit->self)
+    {
+      t->val = link;
+      return (VALUE)t;
+    }
+  }
+
+  VALUE klass = Qnil;
+  link = Qnil;
+  if (rb_type(obj) == T_OBJECT) {
+    klass = sandbox_const_find(kit, rb_obj_classname(obj));
+  }
+  if (!NIL_P(klass))
+  {
+    link = sandbox_get_linked_class(klass);
+  }
+  if (NIL_P(link))
+  {
+    t->trans = TRANS_MARSHAL;
+    t->val = rb_marshal_dump(obj, Qnil);
+  }
+  else
+  {
+    t->val = rb_obj_alloc(klass);
+    sandbox_link_class(obj, t->val);
+  }
+  return (VALUE)t;
+}
+
+static VALUE
+sandbox_arg_load(obj)
+  VALUE obj;
+{
+  sandtransfer *t = (sandtransfer *)obj;
+  if (t->trans == TRANS_MARSHAL)
+  {
+    obj = rb_marshal_load(t->val);
+  }
+  else
+  {
+    obj = t->val;
+  }
+  free(t);
+  return obj;
+}
+
+/*
+ * Wraps the sandbox action in a rescue block.
+ */
+static VALUE
+sandbox_run_begin(wick)
+  VALUE wick;
+{
+  return rb_rescue2(sandbox_run_wick, wick, sandbox_run_rescue, wick, rb_cObject, 0);
+}
+
+/*
+ * The body of the sandbox begin..end.  Determines how the wick is wired and
+ * works on carrying it out right.
+ */
+static VALUE
+sandbox_run_wick(v)
+  VALUE v;
+{
+  VALUE obj;
+  sandkit *banished;
+  sandwick *wick = (sandwick *)v;
+  if (!rb_const_defined(rb_cObject, rb_intern("TOPLEVEL_BINDING"))) {
+    rb_const_set(rb_cObject, rb_intern("TOPLEVEL_BINDING"), rb_eval_string("binding"));
+  }
+  switch (wick->calltype)
+  {
+    case SANDBOX_EVAL:
+      obj = sandbox_run_eval(wick);
+      break;
+    case SANDBOX_METHOD_CALL:
+      obj = sandbox_run_method_call(wick);
+      break;
+    case SANDBOX_ACTION:
+      obj = sandbox_run_action(wick);
+      break;
+  }
+
+  Data_Get_Struct( wick->banished, sandkit, banished );
+  return sandbox_arg_prep(banished, obj);
+}
+
+/*
+ * Rescues any exception thrown inside the sandbox call.
+ */
+static VALUE
+sandbox_run_rescue(v, exc)
+  VALUE v, exc;
+{
+  sandwick *wick = (sandwick *)v;
+  wick->exception = exc;
   return Qnil;
 }
 
+/*
+ * Ensures the sandbox is closed properly and re-raises any exception in the
+ * right environment.
+ *
+ * Used to be sandbox_whoa_whoa_whoa.
+ */
 static VALUE
-sandbox_perform_inner(value)
-  VALUE value;
+sandbox_run_ensure(v)
+  VALUE v;
 {
-  go_cart *go=(go_cart *)value;
-  mini_closure *closure=(mini_closure *)go->argv[0];
-  return rb_rescue2(closure->f, closure->data, sandbox_capture_exception, (VALUE)go, rb_cObject, 0);
-}
+  sandwick *wick = (sandwick *)v;
+  VALUE exc = wick->exception;
+  VALUE msg;
+  const char *path;
 
-static VALUE
-sandbox_perform_raw(kit, action, arg)
-  sandkit *kit;
-  VALUE (*action)();
-  VALUE arg;
-{
-  mini_closure closure={ action, arg };
-  VALUE temp=(VALUE)&closure;
-  go_cart go;
-  sandbox_begin(kit, &go);
-  go.argv = &temp;
-  return rb_ensure(sandbox_perform_inner, (VALUE)&go, sandbox_whoa_whoa_whoa, (VALUE)&go);
-}
-
-VALUE
-sandbox_perform(kit, action, arg)
-  sandkit *kit;
-  VALUE (*action)();
-  VALUE arg;
-{
-  return sandbox_obj_ref(kit, sandbox_perform_raw(kit, action, arg));
-}
-
-VALUE
-sandbox_go_go_go(str)
-  VALUE str;
-{
-  StringValue(str);
-  if (!rb_const_defined(rb_cObject, rb_intern("TOPLEVEL_BINDING"))) {
-      rb_const_set(rb_cObject, rb_intern("TOPLEVEL_BINDING"), rb_eval_string("binding"));
+  if (!NIL_P(exc))
+  {
+    msg = rb_funcall(exc, rb_intern("message"), 0);
+    path = rb_obj_classname(exc);
   }
-  return rb_eval_string(rb_str_ptr(str));
+  sandbox_off( wick );
+  free( wick );
+  if (!NIL_P(exc))
+  {
+    rb_raise(rb_eSandboxException, "%s: %s", path, rb_str_ptr(msg));
+  }
+}
+
+/*
+ * This is the central function now for all sandbox calling.  You pass in the
+ * sandkit, which is essentially the parts of the Ruby interpreter needed to
+ * run the sandbox.  The wick is a bit of information about how the sandbox
+ * is to be called, what objects are to be imported, and so on.
+ *
+ * When combusted within this method, the sandbox gets rolling and either returns
+ * the resulting object or tosses an exception from within the calling sandbox.
+ */
+VALUE
+sandbox_run(kit, wick)
+  sandkit *kit;
+  sandwick *wick;
+{
+  VALUE obj;
+  int i;
+
+  for (i = 1; i < wick->argc; i++) {
+    wick->argv[i] = sandbox_arg_prep(kit, wick->argv[i]);
+  }
+  sandbox_on(kit, wick);
+  for (i = 1; i < wick->argc; i++) {
+    wick->argv[i] = sandbox_arg_load(wick->argv[i]);
+  }
+
+  obj = rb_ensure(sandbox_run_begin, (VALUE)wick, sandbox_run_ensure, (VALUE)wick);
+  return sandbox_arg_load(obj);
 }
 
 /* :nodoc: */
@@ -547,7 +728,7 @@ sandbox_eval( self, str )
 {
   sandkit *kit;
   Data_Get_Struct( self, sandkit, kit );
-  return sandbox_perform(kit, sandbox_go_go_go, (VALUE)str);
+  return sandbox_run(kit, sandbox_eval_wick(str));
 }
 
 /*
@@ -606,7 +787,7 @@ sandbox_dup_into( kit, obj )
   sandkit *kit;
   VALUE obj;
 {
-  return sandbox_perform_raw(kit, rb_marshal_load, rb_marshal_dump(obj, Qnil));
+  return sandbox_run(kit, sandbox_action_wick(rb_marshal_load, rb_marshal_dump(obj, Qnil)));
 }
 
 /*
@@ -669,20 +850,13 @@ VALUE sandbox_current( self )
   return ruby_sandbox;
 }
 
-VALUE
-sandbox_boxedclass_funcall(go)
-  go_cart *go;
-{
-  return rb_funcall2(go->link, SYM2ID(go->argv[0]), go->argc - 1, &go->argv[1]);
-}
-
-VALUE
-sandbox_boxedclass_go(go)
-  go_cart *go;
-{
-  return rb_rescue2(sandbox_boxedclass_funcall, (VALUE)go, sandbox_capture_exception, (VALUE)go, rb_cObject, 0);
-}
-
+/*
+ *  call-seq:
+ *     BoxedClass.method_missing => obj
+ *
+ *  Executes the method under the class (or object)'s original environment,
+ *  passing in and returning references as needed.
+ */
 static VALUE
 sandbox_boxedclass_method_missing(argc, argv, self)
   int argc;
@@ -692,23 +866,13 @@ sandbox_boxedclass_method_missing(argc, argv, self)
   VALUE link = sandbox_get_linked_class(self);
   if (NIL_P(link)) {
     /* FIXME: oh, wait, this shouldn't happen! */
-    rb_raise(rb_eNoMethodError, "no link for %s", self);
+    rb_raise(rb_eNoMethodError, "no link for %s", RSTRING(rb_inspect(self))->ptr);
   } else {
     int i;
-    go_cart go;
     sandkit *kit;
-    VALUE obj;
     VALUE box = sandbox_get_linked_box(self);
     Data_Get_Struct(box, sandkit, kit);
-    sandbox_begin(kit, &go);
-    for (i = 0; i < argc; i++) {
-      argv[i] = sandbox_obj_ref(go.banished, argv[i]);
-    }
-    go.argc = argc;
-    go.argv = argv;
-    go.link = link;
-    obj = rb_ensure(sandbox_boxedclass_go, (VALUE)&go, sandbox_whoa_whoa_whoa, (VALUE)&go);
-    return sandbox_obj_ref(kit, obj);
+    return sandbox_run(kit, sandbox_method_wick(link, argc, argv));
   }
 }
 
@@ -1986,6 +2150,7 @@ Init_kit(kit, use_base)
   kit->cBoxedClass = sandbox_defclass(kit, "BoxedClass", kit->cObject);
   rb_define_singleton_method( kit->cBoxedClass, "method_missing", sandbox_boxedclass_method_missing, -1 );
   rb_define_method( kit->cBoxedClass, "method_missing", sandbox_boxedclass_method_missing, -1 );
+  SAND_UNDEF(cBoxedClass, "new");
 }
 
 static void
@@ -2780,7 +2945,7 @@ Init_kit_prelude(kit)
   args.kit = kit;
   args.prelude = rb_const_get(rb_cSandbox, rb_intern("PRELUDE"));
   StringValue(args.prelude);
-  sandbox_perform_raw(kit, Init_kit_prelude_inner, (VALUE)&args);
+  sandbox_run(kit, sandbox_action_wick(Init_kit_prelude_inner, (VALUE)&args));
 }
 
 void Init_sand_table()

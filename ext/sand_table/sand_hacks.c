@@ -10,6 +10,15 @@
  */
 #include "sand_table.h"
  
+#define HAS_IVTBL(o, v) \
+  char v = 0; \
+  switch (TYPE(o)) { \
+    case T_OBJECT: \
+    case T_CLASS: \
+    case T_MODULE: \
+      v = 1; \
+  }
+
 VALUE
 sandbox_str(kit, ptr)
   sandkit *kit;
@@ -290,6 +299,9 @@ void
 sandbox_link_class(c, kitc)
   VALUE c, kitc;
 {
+  HAS_IVTBL(kitc, has_tbl);
+  if (!has_tbl) return;
+
   if (!ROBJECT(kitc)->iv_tbl) {
     ROBJECT(kitc)->iv_tbl = st_init_numtable();
   }
@@ -302,6 +314,9 @@ sandbox_get_linked_class(kitc)
   VALUE kitc;
 {
   VALUE c = Qnil;
+  HAS_IVTBL(kitc, has_tbl);
+  if (!has_tbl) return c;
+
   if (ROBJECT(kitc)->iv_tbl) {
     st_lookup(ROBJECT(kitc)->iv_tbl, rb_intern("__link__"), &c);
   }
@@ -313,6 +328,9 @@ sandbox_get_linked_box(kitc)
   VALUE kitc;
 {
   VALUE c = Qnil;
+  HAS_IVTBL(kitc, has_tbl);
+  if (!has_tbl) return c;
+
   if (ROBJECT(kitc)->iv_tbl) {
     st_lookup(ROBJECT(kitc)->iv_tbl, rb_intern("__box__"), &c);
   }
@@ -335,6 +353,46 @@ sandbox_foreach_method(mod_from, mod_to, func)
   st_foreach(RCLASS(argv[0])->m_tbl, func, (st_data_t)argv);
 
   free(argv);
+}
+
+VALUE
+sandbox_const_find(kit, path)
+  sandkit *kit;
+  const char *path;
+{
+  const char *pbeg, *p;
+  ID id;
+  VALUE kitc = kit->cObject;
+  if (path[0] == '#') {
+    return Qnil;
+  }
+  pbeg = p = path;
+  while (*p) {
+    VALUE str;
+
+    while (*p && *p != ':') p++;
+    str = rb_str_new(pbeg, p-pbeg);
+    id = rb_to_id(str);
+    if (p[0] == ':') {
+      if (p[1] != ':') goto undefined_class;
+      p += 2;
+      pbeg = p;
+    }
+    if (!rb_const_defined(kitc, id)) {
+      undefined_class:
+        return Qnil;
+    }
+    kitc = rb_const_get_at(kitc, id);
+    switch (TYPE(kitc))
+    {
+      case T_CLASS:
+      case T_MODULE:
+        break;
+      default:
+        return Qnil;
+    }
+  }
+  return kitc;
 }
 
 VALUE
@@ -374,13 +432,17 @@ sandbox_import_class_path(kit, path, link)
         super = sandbox_import_class_path(kit, rb_class2name(RCLASS(c)->super), link);
       }
       if (kitc == kit->cObject) {
-        switch (TYPE(c)) {
-          case T_MODULE:
-            kitc = sandbox_defmodule(kit, rb_str_ptr(str));
-          break;
-          case T_CLASS:
-            kitc = sandbox_defclass(kit, rb_str_ptr(str), super);
-          break;
+        if (link) {
+          kitc = sandbox_defclass(kit, rb_str_ptr(str), super);
+        } else {
+          switch (TYPE(c)) {
+            case T_MODULE:
+              kitc = sandbox_defmodule(kit, rb_str_ptr(str));
+            break;
+            case T_CLASS:
+              kitc = sandbox_defclass(kit, rb_str_ptr(str), super);
+            break;
+          }
         }
       } else {
         switch (TYPE(c)) {

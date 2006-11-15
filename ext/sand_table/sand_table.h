@@ -160,6 +160,33 @@ typedef struct SANDKIT {
   struct SCOPE *scope;
 } sandkit;
 
+#define SANDBOX_EVAL        10
+#define SANDBOX_METHOD_CALL 11
+#define SANDBOX_ACTION      12
+
+/* The sandwick struct is just the old go_cart struct,
+ * but I want its initalization and execution methods
+ * to be responsible for marshalling and linking stuff
+ * in and out of the sandbox.  This way, checking all
+ * the arguments and returns from method calls or evals
+ * can get some sanity.
+ */
+typedef struct {
+  /* how is the sandbox to be called? */
+  char calltype;
+  int argc;
+  VALUE *argv;
+  VALUE link;
+  VALUE (*action)();
+
+  /* used to negotiate the swap */
+  VALUE exception;
+  sandkit *kit;
+  VALUE banished;
+  struct SCOPE *scope;
+  struct RVarmap *dyna_vars;
+} sandwick;
+
 #define SAND_BASE(K) (use_base == 0 ? rb_##K : base.K)
 #define SAND_COPY(K, M) sandbox_copy_method(kit->K, rb_intern(M), SAND_BASE(K));
 #define SAND_COPY_ALLOC(K) Check_Type(kit->K, T_CLASS); sandbox_copy_method(RBASIC(kit->K)->klass, ID_ALLOCATOR, RBASIC(SAND_BASE(K))->klass);
@@ -175,9 +202,13 @@ typedef struct SANDKIT {
     rb_define_const(error, "Errno", rb_const_get(rb_const_get(SAND_BASE(K), rb_intern(M)), rb_intern("Errno"))); \
   }
 
+sandwick *sandbox_method_wick(VALUE, int, VALUE *);
+sandwick *sandbox_eval_wick(VALUE);
+sandwick *sandbox_action_wick(VALUE (*)(), VALUE);
+VALUE sandbox_run(sandkit *kit, sandwick *wick);
+
 VALUE sandbox_module_new(sandkit *);
 VALUE sandbox_mod_name(VALUE mod);
-VALUE sandbox_perform(sandkit *, VALUE (*)(), VALUE);
 VALUE sandbox_dummy();
 VALUE sandbox_define_module_id(sandkit *, ID);
 VALUE sandbox_boot(sandkit *, VALUE);
