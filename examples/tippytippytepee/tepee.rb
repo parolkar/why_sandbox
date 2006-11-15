@@ -5,9 +5,6 @@ $:.unshift File.dirname(__FILE__) + "/../../lib"
 
 Camping.goes :Tepee
 
-Tepee::Box = Sandbox.safe
-Tepee::Box.load "erbl.rb"
-
 module Tepee::Models
 
   class Page < Base
@@ -33,6 +30,10 @@ module Tepee::Models
   end
 
 end
+
+Tepee::Box = Sandbox.safe
+Tepee::Box.load "erbl.rb"
+Tepee::Box.ref Tepee::Models::Page
 
 module Tepee::Controllers
   class Index < R '/'
