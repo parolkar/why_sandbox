@@ -10,7 +10,7 @@
 #ifndef SAND_TABLE_H
 #define SAND_TABLE_H
 
-#define SAND_VERSION "0.1"
+#define SAND_VERSION "0.3"
 
 #define FREAKYFREAKY "freakyfreakysandbox"
 
