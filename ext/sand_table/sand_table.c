@@ -330,7 +330,8 @@ mark_sandwick(wick)
     rb_gc_mark(wick->kit->self);
   }
   rb_gc_mark(wick->banished);
-  /* TODO: mark wick->scope and wick->dyna_vars */
+  rb_gc_mark((VALUE)wick->scope);
+  rb_gc_mark((VALUE)wick->dyna_vars);
 }
 
 void
