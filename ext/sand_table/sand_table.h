@@ -172,6 +172,8 @@ typedef struct SANDKIT {
  * can get some sanity.
  */
 typedef struct {
+  VALUE self;
+
   /* how is the sandbox to be called? */
   char calltype;
   int argc;

@@ -16,7 +16,7 @@ static sandkit real;
 static sandkit base;
 
 static VALUE Qimport, Qinit, Qload, Qenv, Qio, Qreal, Qref, Qall;
-VALUE rb_cSandbox, rb_cSandboxFull, rb_cSandboxSafe, rb_eSandboxException, rb_cSandboxRef;
+VALUE rb_cSandbox, rb_cSandboxFull, rb_cSandboxSafe, rb_eSandboxException, rb_cSandboxRef, rb_cSandwick;
 static ID s_options;
 
 static VALUE sandbox_run_begin(VALUE wick);
@@ -316,6 +316,53 @@ typedef struct {
   char trans;
 } sandtransfer;
 
+void
+mark_sandwick(wick)
+  sandwick *wick;
+{
+  int i;
+  for ( i = 0 ; i < wick->argc ; i++ ) {
+    rb_gc_mark_maybe(wick->argv[i]);
+  }
+  rb_gc_mark(wick->link);
+  rb_gc_mark(wick->exception);
+  if (wick->kit) {
+    rb_gc_mark(wick->kit->self);
+  }
+  rb_gc_mark(wick->banished);
+  /* TODO: mark wick->scope and wick->dyna_vars */
+}
+
+void
+free_sandwick(wick)
+  sandwick *wick;
+{
+  rb_gc_unregister_address(&wick->self);
+  free(wick);
+}
+
+sandwick *
+alloc_sandwick()
+{
+  sandwick *wick;
+  wick = (sandwick *)malloc(sizeof(sandwick));
+  wick->self = Qnil;
+  wick->argc = 0;
+  wick->argv = NULL;
+  wick->link = Qnil;
+  wick->action = NULL;
+  wick->exception = Qnil;
+  wick->kit = NULL;
+  wick->banished = Qnil;
+  wick->scope = NULL;
+  wick->dyna_vars = NULL;
+
+  rb_gc_register_address(&wick->self);
+  wick->self = Data_Wrap_Struct(rb_cSandwick, mark_sandwick, free_sandwick, wick);
+
+  return wick;
+}
+
 /*
  * A "wick" for starting a sandbox that calls
  * a method of a linked object inside that same
@@ -327,9 +374,8 @@ sandbox_method_wick(link, argc, argv)
   int argc;
   VALUE *argv;
 {
-  sandwick *wick = ALLOC(sandwick);
+  sandwick *wick = alloc_sandwick();
   wick->calltype = SANDBOX_METHOD_CALL;
-  wick->action = NULL;
   wick->link = link;
   wick->argc = argc;
   wick->argv = argv;
@@ -354,12 +400,9 @@ sandwick *
 sandbox_eval_wick(str)
   VALUE str;
 {
-  sandwick *wick = ALLOC(sandwick);
+  sandwick *wick = alloc_sandwick();
   wick->calltype = SANDBOX_EVAL;
-  wick->action = NULL;
   wick->link = str;
-  wick->argc = 0;
-  wick->argv = NULL;
   return wick;
 }
 
@@ -685,7 +728,7 @@ sandbox_run_ensure(v)
     path = rb_obj_classname(exc);
   }
   sandbox_off( wick );
-  free( wick );
+  free_sandwick( wick );
   if (!NIL_P(exc))
   {
     rb_raise(rb_eSandboxException, "%s: %s", path, rb_str_ptr(msg));
@@ -2958,6 +3001,8 @@ void Init_sand_table()
   Init_kit_io(&base, 0);
   Init_kit_env(&base, 0);
   Init_kit_real(&base, 0);
+
+  rb_cSandwick = rb_class_new(rb_cObject);
 
   rb_cSandbox = rb_define_module("Sandbox");
   rb_cSandboxFull = rb_define_class_under(rb_cSandbox, "Full", rb_cObject);
