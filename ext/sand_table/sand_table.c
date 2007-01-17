@@ -16,7 +16,7 @@ static sandkit real;
 static sandkit base;
 
 static VALUE Qimport, Qinit, Qload, Qenv, Qio, Qreal, Qref, Qall;
-VALUE rb_cSandbox, rb_cSandboxFull, rb_cSandboxSafe, rb_eSandboxException, rb_cSandboxRef, rb_cSandwick;
+VALUE rb_cSandbox, rb_cSandboxFull, rb_cSandboxSafe, rb_eSandboxException, rb_cSandboxRef, rb_cSandboxWick;
 static ID s_options;
 
 static VALUE sandbox_run_begin(VALUE wick);
@@ -357,9 +357,8 @@ alloc_sandwick()
   wick->banished = Qnil;
   wick->scope = NULL;
   wick->dyna_vars = NULL;
-
+  wick->self = Data_Wrap_Struct(rb_cSandboxWick, mark_sandwick, free_sandwick, wick);
   rb_gc_register_address(&wick->self);
-  wick->self = Data_Wrap_Struct(rb_cSandwick, mark_sandwick, free_sandwick, wick);
 
   return wick;
 }
@@ -428,7 +427,7 @@ sandbox_action_wick(action, link)
   VALUE (*action)();
   VALUE link;
 {
-  sandwick *wick = ALLOC(sandwick);
+  sandwick *wick = alloc_sandwick();
   wick->calltype = SANDBOX_ACTION;
   wick->action = action;
   wick->link = link;
@@ -824,14 +823,6 @@ sandbox_get_main( self )
   sandkit *kit;
   Data_Get_Struct( self, sandkit, kit );
   return kit->oMain;
-}
-
-VALUE
-sandbox_dup_into( kit, obj )
-  sandkit *kit;
-  VALUE obj;
-{
-  return sandbox_run(kit, sandbox_action_wick(rb_marshal_load, rb_marshal_dump(obj, Qnil)));
 }
 
 /*
@@ -3003,8 +2994,6 @@ void Init_sand_table()
   Init_kit_env(&base, 0);
   Init_kit_real(&base, 0);
 
-  rb_cSandwick = rb_class_new(rb_cObject);
-
   rb_cSandbox = rb_define_module("Sandbox");
   rb_cSandboxFull = rb_define_class_under(rb_cSandbox, "Full", rb_cObject);
   rb_define_const( rb_cSandbox, "VERSION", rb_str_new2( SAND_VERSION ) );
@@ -3023,6 +3012,7 @@ void Init_sand_table()
   rb_cSandboxSafe = rb_define_class_under(rb_cSandbox, "Safe", rb_cSandboxFull);
   rb_eSandboxException = rb_define_class_under(rb_cSandbox, "Exception", rb_eException);
   rb_cSandboxRef = rb_define_class_under(rb_cSandbox, "Ref", rb_cObject);
+  rb_cSandboxWick = rb_define_class_under(rb_cSandbox, "Wick", rb_cObject);
 
   s_options = rb_intern("@options");
   Qinit = ID2SYM(rb_intern("init"));
