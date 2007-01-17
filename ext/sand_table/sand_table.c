@@ -16,7 +16,7 @@ static sandkit real;
 static sandkit base;
 
 static VALUE Qimport, Qinit, Qload, Qenv, Qio, Qreal, Qref, Qall;
-VALUE rb_cSandbox, rb_cSandboxFull, rb_cSandboxSafe, rb_eSandboxException, rb_cSandboxRef, rb_cSandboxWick;
+VALUE rb_cSandbox, rb_cSandboxFull, rb_cSandboxSafe, rb_eSandboxException, rb_cSandboxRef, rb_cSandboxWick, rb_cSandboxTransfer;
 static ID s_options;
 
 static VALUE sandbox_run_begin(VALUE wick);
@@ -135,7 +135,6 @@ static VALUE
 sandbox_save(thread)
   rb_thread_t thread;
 {
-  /* printf("KIT SAVE: %lu, %lu -> %lu\n", thread, thread->sandbox, ruby_sandbox); */
   if (NIL_P(thread->sandbox))
   {
     sandbox_swap(&real, SANDBOX_STORE);
@@ -153,7 +152,6 @@ static VALUE
 sandbox_restore(thread)
   rb_thread_t thread;
 {
-  /* printf("KIT RESTORE: %lu, %lu -> %lu\n", thread, thread->sandbox, ruby_sandbox); */
   if (NIL_P(thread->sandbox))
   {
     thread->sandbox = real.self;
@@ -165,7 +163,6 @@ sandbox_restore(thread)
     Data_Get_Struct( thread->sandbox, sandkit, kit );
     sandbox_swap(kit, SANDBOX_REPLACE);
   }
-  /* printf("END KIT RESTORE: %lu\n", thread); */
   return Qnil;
 }
 
@@ -312,9 +309,37 @@ sandbox_initialize(argc, argv, self)
 
 /* Simple struct for dealing with the arg transfer. */
 typedef struct {
+  VALUE self;
   VALUE val;
   char trans;
 } sandtransfer;
+
+void
+mark_sandtransfer(transfer)
+  sandtransfer *transfer;
+{
+  rb_gc_mark_maybe(transfer->val);
+}
+
+void
+free_sandtransfer(transfer)
+  sandtransfer *transfer;
+{
+  rb_gc_unregister_address(&transfer->self);
+  free(transfer);
+}
+
+sandtransfer *
+alloc_sandtransfer()
+{
+  sandtransfer *transfer = ALLOC(sandtransfer);
+  transfer->val = Qnil;
+  transfer->trans = 0;
+  transfer->self = Data_Wrap_Struct(rb_cSandboxTransfer, mark_sandtransfer, free_sandtransfer, transfer);
+  rb_gc_register_address(&transfer->self);
+
+  return transfer;
+}
 
 void
 mark_sandwick(wick)
@@ -324,7 +349,7 @@ mark_sandwick(wick)
   for ( i = 0 ; i < wick->argc ; i++ ) {
     rb_gc_mark_maybe(wick->argv[i]);
   }
-  rb_gc_mark(wick->link);
+  rb_gc_mark_maybe(wick->link);
   rb_gc_mark(wick->exception);
   if (wick->kit) {
     rb_gc_mark(wick->kit->self);
@@ -346,7 +371,7 @@ sandwick *
 alloc_sandwick()
 {
   sandwick *wick;
-  wick = (sandwick *)malloc(sizeof(sandwick));
+  wick = ALLOC(sandwick);
   wick->self = Qnil;
   wick->argc = 0;
   wick->argv = NULL;
@@ -556,7 +581,6 @@ sandbox_on( kit, wick )
   wick->scope = ruby_scope;
   wick->dyna_vars = ruby_dyna_vars;
   curr_thread->sandbox = kit->self;
-  /* printf("BEGINBEGIN!\n"); */
 
   sandbox_swap(kit, SANDBOX_REPLACE);
   ruby_scope = kit->scope;
@@ -580,7 +604,6 @@ sandbox_off( wick )
   ruby_scope = wick->scope;
   ruby_dyna_vars = wick->dyna_vars;
   curr_thread->sandbox = ruby_sandbox;
-  /* printf("WHOAWHOA! %lu -> %lu\n", wick->kit->self, wick->banished); */
 }
 
 /*
@@ -596,7 +619,7 @@ sandbox_arg_prep(kit, obj)
   sandkit *kit;
   VALUE obj;
 {
-  sandtransfer *t = ALLOC(sandtransfer);
+  sandtransfer *t = alloc_sandtransfer();
   t->trans = TRANS_NONE;
   if (SPECIAL_CONST_P(obj))
   {
@@ -650,7 +673,6 @@ sandbox_arg_load(obj)
   {
     obj = t->val;
   }
-  free(t);
   return obj;
 }
 
@@ -728,7 +750,6 @@ sandbox_run_ensure(v)
     path = rb_obj_classname(exc);
   }
   sandbox_off( wick );
-  free_sandwick( wick );
   if (!NIL_P(exc))
   {
     rb_raise(rb_eSandboxException, "%s: %s", path, rb_str_ptr(msg));
@@ -3013,6 +3034,7 @@ void Init_sand_table()
   rb_eSandboxException = rb_define_class_under(rb_cSandbox, "Exception", rb_eException);
   rb_cSandboxRef = rb_define_class_under(rb_cSandbox, "Ref", rb_cObject);
   rb_cSandboxWick = rb_define_class_under(rb_cSandbox, "Wick", rb_cObject);
+  rb_cSandboxTransfer = rb_define_class_under(rb_cSandbox, "Transfer", rb_cObject);
 
   s_options = rb_intern("@options");
   Qinit = ID2SYM(rb_intern("init"));
