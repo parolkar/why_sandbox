@@ -16,13 +16,15 @@ _______________________________________________________________________________
  To run the freaky freaky sandbox, you need a patched Ruby 1.8.5 and the sandbox
  extension.
 
- There are two patches, one which let's us swap out the `main` object.  And
- another which adds a Thread#kill! for stopping unending sandboxes.  They are
- both in the patch/ directory of this release.
+ There is one patch, which adds a Thread#kill! for stopping unending sandboxes.
+ Also, the patch will manage swapping sandboxes in accord with the Ruby's
+ scheduler.  Lastly, it opens up the syserr_tbl, which allows the sandbox to
+ have its own set of OS exceptions.
+
+ See the patch/ directory of this release.
 
   $ cd ruby-1.8.5
-  $ patch -p1 < ruby-1.8.5-crefs_exposed.patch
-  $ patch -p1 < ruby-1.8.5-thread_kill_bang.patch
+  $ patch -p1 < ruby-1.8.5-sandbox_needs.patch
   $ make
   # make install
 
@@ -30,6 +32,8 @@ _______________________________________________________________________________
 
   # ruby setup.rb
 
+ There are no gems for Sandbox.  This is not without reason!  Sandbox _must_ be
+ loaded before RubyGems.  So it is infeasible to distribute it as a gem for now.
 _______________________________________________________________________________
 -------------------------------------------------------------------------------
 

@@ -7,7 +7,7 @@ module Sandbox
   PRELUDE = File.expand_path("../sandbox/prelude.rb", __FILE__) #:nodoc:
 
   #
-  # Stands in for an exception raised within the sandbox during evaluation.
+  # Stands in for an uncaught exception raised within the sandbox during evaluation.
   # (See Sandbox#eval.)
   #
   class Exception
