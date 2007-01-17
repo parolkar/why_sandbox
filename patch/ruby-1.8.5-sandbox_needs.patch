@@ -1,6 +1,58 @@
+diff -wur ruby-1.8.5/error.c ruby-1.8.5-sandbox/error.c
+--- ruby-1.8.5/error.c	2006-07-20 02:04:13.000000000 -0500
++++ ruby-1.8.5-sandbox/error.c	2007-01-17 01:37:12.000000000 -0500
+@@ -827,7 +827,7 @@
+  *     Errno.constants   #=> E2BIG, EACCES, EADDRINUSE, EADDRNOTAVAIL, ...
+  */
+ 
+-static st_table *syserr_tbl;
++st_table *rb_syserr_tbl;
+ 
+ static VALUE
+ set_syserr(n, name)
+@@ -836,10 +836,10 @@
+ {
+     VALUE error;
+ 
+-    if (!st_lookup(syserr_tbl, n, &error)) {
++    if (!st_lookup(rb_syserr_tbl, n, &error)) {
+ 	error = rb_define_class_under(rb_mErrno, name, rb_eSystemCallError);
+ 	rb_define_const(error, "Errno", INT2NUM(n));
+-	st_add_direct(syserr_tbl, n, error);
++	st_add_direct(rb_syserr_tbl, n, error);
+     }
+     else {
+ 	rb_define_const(rb_mErrno, name, error);
+@@ -853,7 +853,7 @@
+ {
+     VALUE error;
+ 
+-    if (!st_lookup(syserr_tbl, n, &error)) {
++    if (!st_lookup(rb_syserr_tbl, n, &error)) {
+ 	char name[8];	/* some Windows' errno have 5 digits. */
+ 
+ 	snprintf(name, sizeof(name), "E%03d", n);
+@@ -891,7 +891,7 @@
+ 	if (argc == 1 && FIXNUM_P(mesg)) {
+ 	    error = mesg; mesg = Qnil;
+ 	}
+-	if (!NIL_P(error) && st_lookup(syserr_tbl, NUM2LONG(error), &klass)) {
++	if (!NIL_P(error) && st_lookup(rb_syserr_tbl, NUM2LONG(error), &klass)) {
+ 	    /* change class */
+ 	    if (TYPE(self) != T_OBJECT) { /* insurance to avoid type crash */
+ 		rb_raise(rb_eTypeError, "invalid instance type");
+@@ -1031,7 +1031,7 @@
+     rb_eSecurityError = rb_define_class("SecurityError", rb_eStandardError);
+     rb_eNoMemError = rb_define_class("NoMemoryError", rb_eException);
+ 
+-    syserr_tbl = st_init_numtable();
++    rb_syserr_tbl = st_init_numtable();
+     rb_eSystemCallError = rb_define_class("SystemCallError", rb_eStandardError);
+     rb_define_method(rb_eSystemCallError, "initialize", syserr_initialize, -1);
+     rb_define_method(rb_eSystemCallError, "errno", syserr_errno, 0);
 diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox/eval.c
---- ruby-1.8.5/eval.c	Sun Aug  6 21:43:39 2006
-+++ ruby-1.8.5-sandbox/eval.c	Sat Sep 23 21:24:30 2006
+--- ruby-1.8.5/eval.c	2006-08-06 22:43:39.000000000 -0500
++++ ruby-1.8.5-sandbox/eval.c	2007-01-17 01:34:16.000000000 -0500
 @@ -29,11 +29,6 @@
  #endif
  
@@ -360,8 +412,8 @@ diff -wur ruby-1.8.5/eval.c ruby-1.8.5-sandbox/eval.c
      rb_define_method(rb_cThread, "status", rb_thread_status, 0);
      rb_define_method(rb_cThread, "join", rb_thread_join_m, -1);
 diff -wur ruby-1.8.5/node.h ruby-1.8.5-sandbox/node.h
---- ruby-1.8.5/node.h	Mon Feb 13 02:10:53 2006
-+++ ruby-1.8.5-sandbox/node.h	Sat Sep 23 21:22:38 2006
+--- ruby-1.8.5/node.h	2006-02-13 03:10:53.000000000 -0500
++++ ruby-1.8.5-sandbox/node.h	2007-01-17 01:34:16.000000000 -0500
 @@ -151,6 +151,9 @@
      } u3;
  } NODE;
@@ -372,11 +424,10 @@ diff -wur ruby-1.8.5/node.h ruby-1.8.5-sandbox/node.h
  #define RNODE(obj)  (R_CAST(RNode)(obj))
  
  #define nd_type(n) ((int)(((RNODE(n))->flags>>FL_USHIFT)&0xff))
-@@ -370,6 +373,97 @@
- typedef void (*rb_event_hook_func_t) _((rb_event_t,NODE*,VALUE,ID,VALUE));
+@@ -371,6 +374,97 @@
  void rb_add_event_hook _((rb_event_hook_func_t,rb_event_t));
  int rb_remove_event_hook _((rb_event_hook_func_t));
-+
+ 
 +#if defined(HAVE_GETCONTEXT) && defined(HAVE_SETCONTEXT)
 +#include <ucontext.h>
 +#define USE_CONTEXT
@@ -467,12 +518,13 @@ diff -wur ruby-1.8.5/node.h ruby-1.8.5-sandbox/node.h
 +extern VALUE (*ruby_sandbox_restore)(struct thread *); 
 +extern rb_thread_t curr_thread;
 +extern rb_thread_t main_thread;
- 
++
  #if defined(__cplusplus)
  }  /* extern "C" { */
+ #endif
 diff -wur ruby-1.8.5/ruby.h ruby-1.8.5-sandbox/ruby.h
---- ruby-1.8.5/ruby.h	Sun Aug  6 21:43:42 2006
-+++ ruby-1.8.5-sandbox/ruby.h	Sat Sep 23 21:15:07 2006
+--- ruby-1.8.5/ruby.h	2006-08-06 22:43:42.000000000 -0500
++++ ruby-1.8.5-sandbox/ruby.h	2007-01-17 01:34:16.000000000 -0500
 @@ -626,6 +626,7 @@
  RUBY_EXTERN VALUE rb_eRuntimeError;
  RUBY_EXTERN VALUE rb_eSecurityError;

@@ -27,6 +27,7 @@ extern VALUE ruby_top_self;
 extern struct FRAME *ruby_frame;
 extern struct SCOPE *ruby_scope;
 extern st_table *rb_global_tbl;
+extern st_table *rb_syserr_tbl;
 
 #ifdef RARRAY_LEN
 #undef T_SYMBOL
@@ -60,6 +61,7 @@ extern "C" {
 typedef struct SANDKIT {
   st_table *tbl;
   st_table *globals;
+  st_table *syserrs;
   VALUE self;
   VALUE _progname;
 
@@ -201,7 +203,9 @@ typedef struct {
 #define SAND_SYSERR(K, M) \
   if (rb_const_defined(SAND_BASE(K), rb_intern(M))) { \
     VALUE error = rb_define_class_under(kit->mErrno, M, kit->eSystemCallError); \
-    rb_define_const(error, "Errno", rb_const_get(rb_const_get(SAND_BASE(K), rb_intern(M)), rb_intern("Errno"))); \
+    VALUE no = rb_const_get(rb_const_get(SAND_BASE(K), rb_intern(M)), rb_intern("Errno")); \
+    rb_define_const(error, "Errno", no); \
+    st_add_direct(kit->syserrs, NUM2INT(no), error); \
   }
 
 sandwick *sandbox_method_wick(VALUE, int, VALUE *);

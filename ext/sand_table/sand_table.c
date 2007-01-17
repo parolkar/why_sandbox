@@ -129,6 +129,7 @@ mark_sandbox(kit)
   rb_gc_mark((VALUE)kit->ruby_cref);
   rb_gc_mark_maybe(kit->rclass);
   sandbox_mark_globals(kit->globals);
+  rb_mark_tbl(kit->syserrs);
 }
 
 static VALUE
@@ -172,6 +173,7 @@ free_sandbox(kit)
 {   
   st_free_table(kit->tbl);
   st_free_table(kit->globals);
+  st_free_table(kit->syserrs);
   MEMZERO(kit, sandkit, 1);
   free(kit);
 }
@@ -557,6 +559,7 @@ sandbox_swap(kit, mode)
   SWAP_VAR(ruby_top_self, oMain);
   SWAP_VAR(ruby_top_cref, top_cref);
   SWAP_VAR(rb_global_tbl, globals);
+  SWAP_VAR(rb_syserr_tbl, syserrs);
   SWAP_VAR(ruby_cref, ruby_cref);
   // SWAP_VAR(ruby_class, rclass);
   SWAP(cMatch);
@@ -941,6 +944,7 @@ Init_kit(kit, use_base)
 
   kit->tbl = st_init_numtable();
   kit->globals = st_init_numtable();
+  kit->syserrs = st_init_numtable();
   kit->cObject = 0;
 
 #ifdef KIT2
