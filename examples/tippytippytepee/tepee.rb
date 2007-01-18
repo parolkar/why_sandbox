@@ -107,7 +107,7 @@ module Tepee::Views
     unless @no_layout
       html do
         head do
-          title 'test'
+          title 'tippy tippy tepee'
           link :href=>R(Stylesheet), :rel=>'stylesheet', :type=>'text/css' 
         end
         style <<-END, :type => 'text/css'
@@ -163,12 +163,12 @@ module Tepee::Views
     h1 @page.title 
     form :method => 'post', :action => R(Edit, @page.title) do
       p do
-        textarea @page.body, :name => 'post_body', :rows => 50, :cols => 100
+        textarea @page.body, :name => 'post_body', :rows => 30, :cols => 100
       end
-      input :type => 'submit', :value=>'change' 
+      input :type => 'submit', :value=>'save' 
     end
     _button 'cancel', :href => R(Show, @page.title, @page.version) 
-    a 'syntax', :href => 'http://hobix.com/textile/', :target=>'_blank' 
+    a 'syntax', :href => 'http://pub.cozmixng.org/~the-rwiki/?cmd=view;name=ERbMemo.en', :target=>'_blank'
   end
 
   def list
