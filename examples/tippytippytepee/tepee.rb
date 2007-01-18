@@ -7,7 +7,13 @@ Camping.goes :Tepee
 
 module Web
   def self.get(url)
-    JSON.parse(URI.parse(url).read)
+    data = URI.parse(url).read
+    case data.content_type
+    when "application/x-javascript", "application/x-json", "application/json"
+      obj = JSON.parse(data)
+      OpenURI::Meta.init(obj, data)
+      obj
+    end
   end
 end
 
@@ -41,6 +47,9 @@ Tepee::Box = Sandbox.safe
 Tepee::Box.load "support.rb"
 Tepee::Box.ref Tepee::Models::Page
 Tepee::Box.ref Web
+Tepee::Box.import Time
+Tepee::Box.import URI::HTTP
+Tepee::Box.import OpenURI::Meta
 Tepee::Box.import HashWithIndifferentAccess
 
 module Tepee::Controllers
@@ -222,7 +231,7 @@ module Tepee::Views
           def puts(txt); self << txt; end
           ERbLight.new(#{str.dump}).result(binding)
         end.to_s
-      }
+      }, :timeout => 5
     rescue Sandbox::Exception => @boxx
     end
     # RedCloth.new(str, [ :hard_breaks ]).to_html
