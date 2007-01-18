@@ -234,7 +234,7 @@ def Tepee.create
 end
 
 require 'mongrel/camping'
-Tepee::Models::Base.establish_connection :adapter => 'sqlite3', :database => '/home/why/.camping.db'
+Tepee::Models::Base.establish_connection :adapter => 'sqlite3', :database => ENV['HOME'] + '/.camping.db'
 Tepee::Models::Base.threaded_connections=false
   
 s = Mongrel::Camping.start('0.0.0.0', 3300, '/', Tepee)
