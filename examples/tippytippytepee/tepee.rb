@@ -32,8 +32,9 @@ module Tepee::Models
 end
 
 Tepee::Box = Sandbox.safe
-Tepee::Box.load "erbl.rb"
+Tepee::Box.load "support.rb"
 Tepee::Box.ref Tepee::Models::Page
+Tepee::Box.import HashWithIndifferentAccess
 
 module Tepee::Controllers
   class Index < R '/'
@@ -184,10 +185,18 @@ module Tepee::Views
     _eval(body)
   end
 
+  def _dump *var
+    var.map { |v| "Marshal.load(#{Marshal.dump(v).dump})" }.join(',')
+  end
+
   def _eval str
     @boxx = nil
     begin
-      str = Tepee::Box.eval("ERbLight.new(#{str.dump}).result")
+      str = Tepee::Box.eval %{
+        Markaby::Builder.new(:env => #{_dump(@env)}, :input => #{_dump(@input)}) do
+          ERbLight.new(#{str.dump}).result(binding)
+        end.to_s
+      }
     rescue Sandbox::Exception => @boxx
     end
     RedCloth.new(str, [ :hard_breaks ]).to_html
@@ -202,7 +211,7 @@ require 'mongrel/camping'
 Tepee::Models::Base.establish_connection :adapter => 'sqlite3', :database => '/home/why/.camping.db'
 Tepee::Models::Base.threaded_connections=false
   
-s = Mongrel::Camping.start('0.0.0.0', 3301, '/', Tepee)
+s = Mongrel::Camping.start('0.0.0.0', 3300, '/', Tepee)
 s.run.join
 
 __END__
