@@ -1,4 +1,4 @@
-#!/usr/bin/ruby
+#!/usr/bin/env ruby
 require 'sandbox'
 $:.unshift File.dirname(__FILE__) + "/../../lib"
 %w(open-uri rubygems json redcloth camping acts_as_versioned).each { |lib| require lib }
