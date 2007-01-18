@@ -1,9 +1,15 @@
 #!/usr/bin/ruby
 require 'sandbox'
 $:.unshift File.dirname(__FILE__) + "/../../lib"
-%w(rubygems redcloth camping acts_as_versioned).each { |lib| require lib }
+%w(open-uri rubygems json redcloth camping acts_as_versioned).each { |lib| require lib }
 
 Camping.goes :Tepee
+
+module Web
+  def self.get(url)
+    JSON.parse(URI.parse(url).read)
+  end
+end
 
 module Tepee::Models
 
@@ -34,6 +40,7 @@ end
 Tepee::Box = Sandbox.safe
 Tepee::Box.load "support.rb"
 Tepee::Box.ref Tepee::Models::Page
+Tepee::Box.ref Web
 Tepee::Box.import HashWithIndifferentAccess
 
 module Tepee::Controllers
@@ -88,49 +95,58 @@ end
 
 module Tepee::Views
   def layout
-    html do
-      head do
-        title 'test'
-        link :href=>R(Stylesheet), :rel=>'stylesheet', :type=>'text/css' 
-      end
-      style <<-END, :type => 'text/css'
-        body {
-          font-family: verdana, arial, sans-serif;
-        }
-        h1, h2, h3, h4, h5 {
-          font-weight: normal;
-        }
-        p.actions a {
-          margin-right: 6px;
-        }
-      END
-      body do
-        p do
-          small do
-            span "welcome to " ; a 'tepee', :href => "http://code.whytheluckystiff.net/svn/camping/trunk/examples/tepee.rb"
-            span '. go ' ;       a 'home',  :href => R(Show, 'home')
-            span '. list all ' ; a 'pages', :href => R(List)
+    unless @no_layout
+      html do
+        head do
+          title 'test'
+          link :href=>R(Stylesheet), :rel=>'stylesheet', :type=>'text/css' 
+        end
+        style <<-END, :type => 'text/css'
+          body {
+            font-family: verdana, arial, sans-serif;
+          }
+          h1, h2, h3, h4, h5 {
+            font-weight: normal;
+          }
+          p.actions a {
+            margin-right: 6px;
+          }
+        END
+        body do
+          p do
+            small do
+              span "welcome to " ; a 'tepee', :href => "http://code.whytheluckystiff.net/svn/camping/trunk/examples/tepee.rb"
+              span '. go ' ;       a 'home',  :href => R(Show, 'home')
+              span '. list all ' ; a 'pages', :href => R(List)
+            end
+          end
+          div.content do
+            self << yield
           end
         end
-        div.content do
-          self << yield
-        end
       end
+    else
+      self << yield
     end
   end
 
   def show
-    h1 @page.title
-    div { _markup @version.body }
-    if @boxx
-      div.error! @boxx
-    end
-    p.actions do 
-      _button 'edit',      :href => R(Edit, @version.title, @version.version) 
-      _button 'back',      :href => R(Show, @version.title, @version.version-1) unless @version.version == 1 
-      _button 'next',      :href => R(Show, @version.title, @version.version+1) unless @version.version == @page.version 
-      _button 'current',   :href => R(Show, @version.title)                     unless @version.version == @page.version 
-      _button 'versions',  :href => R(Versions, @page.title) 
+    m = _markup @version.body
+    unless @no_layout
+      h1 @page.title
+      div { m }
+      if @boxx
+        div.error! @boxx
+      end
+      p.actions do 
+        _button 'edit',      :href => R(Edit, @version.title, @version.version) 
+        _button 'back',      :href => R(Show, @version.title, @version.version-1) unless @version.version == 1 
+        _button 'next',      :href => R(Show, @version.title, @version.version+1) unless @version.version == @page.version 
+        _button 'current',   :href => R(Show, @version.title)                     unless @version.version == @page.version 
+        _button 'versions',  :href => R(Versions, @page.title) 
+      end
+    else
+      self << m
     end
   end
 
@@ -148,7 +164,9 @@ module Tepee::Views
 
   def list
     h1 'all pages'
-    ul { @pages.each { |p| li { a p.title, :href => R(Show, p.title) } } }
+    ul { @pages.each { |p| 
+      li { a(p.title, :href => R(Show, p.title)) + " [" + a("edit", :href => R(Edit, p.title)) + "]" }
+    } }
   end
 
   def versions
@@ -190,16 +208,24 @@ module Tepee::Views
   end
 
   def _eval str
+    @no_layout = false
     @boxx = nil
     begin
+      str.gsub!(/^@\s+([\w\-]+):\s+(.+)$/) do
+        @headers[$1] = $2.strip; ''
+      end
+      if @headers['Content-Type'] != 'text/html'
+        @no_layout = true
+      end
       str = Tepee::Box.eval %{
         Markaby::Builder.new(:env => #{_dump(@env)}, :input => #{_dump(@input)}) do
+          def puts(txt); self << txt; end
           ERbLight.new(#{str.dump}).result(binding)
         end.to_s
       }
     rescue Sandbox::Exception => @boxx
     end
-    RedCloth.new(str, [ :hard_breaks ]).to_html
+    # RedCloth.new(str, [ :hard_breaks ]).to_html
   end
 end
 
