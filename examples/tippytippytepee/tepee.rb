@@ -7,12 +7,25 @@ Camping.goes :Tepee
 
 module Web
   def self.get(url)
-    data = URI.parse(url).read
+    uri = URI.parse(url)
+    data = nil
+    case uri
+    when URI::HTTP
+      data = uri.read
+    when URI::Generic
+      page = Tepee.get(:Show, url)
+      def page.meta; @env end
+      def page.base_uri; end
+      data = page.body.to_s
+      OpenURI::Meta.init(data, page)
+    end
     case data.content_type
     when "application/x-javascript", "application/x-json", "application/json"
       obj = JSON.parse(data)
       OpenURI::Meta.init(obj, data)
       obj
+    else
+      data
     end
   end
 end
