@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 require 'sandbox'
 $:.unshift File.dirname(__FILE__) + "/../../lib"
-%w(open-uri rubygems json redcloth camping acts_as_versioned).each { |lib| require lib }
+%w(open-uri rubygems json redcloth camping camping/session acts_as_versioned hpricot).each { |lib| require lib }
 
 Camping.goes :Tepee
 
@@ -30,12 +30,16 @@ module Web
   end
 end
 
+module Tepee
+  include Camping::Session
+end
+
 module Tepee::Models
 
   class Page < Base
     PAGE_LINK = /\[\[([^\]|]*)[|]?([^\]]*)\]\]/
     validates_uniqueness_of :title
-    before_save { |r| r.title = r.title.underscore }
+    # before_save { |r| r.title = r.title.underscore }
     acts_as_versioned
   end
 
@@ -63,6 +67,7 @@ Tepee::Box.ref Web
 Tepee::Box.import Time
 Tepee::Box.import URI::HTTP
 Tepee::Box.import OpenURI::Meta
+Tepee::Box.import Hpricot
 Tepee::Box.import HashWithIndifferentAccess
 
 module Tepee::Controllers
@@ -102,7 +107,7 @@ module Tepee::Controllers
 
   class List < R '/all/list'
     def get
-      @pages = Page.find :all, :order => 'title'
+      @pages = (Page.find :all, :order => 'title').reject { |p| p.title =~ /^private/ }
       render :list
     end
   end
@@ -239,6 +244,7 @@ module Tepee::Views
       if @headers['Content-Type'] != 'text/html'
         @no_layout = true
       end
+      Tepee::Box.eval "session_id = '#{@cookies.camping_sid}'"
       str = Tepee::Box.eval %{
         Markaby::Builder.new(:env => #{_dump(@env)}, :input => #{_dump(@input)}) do
           def puts(txt); self << txt; end
@@ -253,6 +259,7 @@ end
 
 def Tepee.create
   Tepee::Models.create_schema :assume => (Tepee::Models::Page.table_exists? ? 1.0 : 0.0)
+  Tepee::Models::Session.create_schema
 end
 
 require 'mongrel/camping'
