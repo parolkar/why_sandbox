@@ -416,7 +416,7 @@ static VALUE
 sandbox_run_method_call(wick)
   sandwick *wick;
 {
-  return rb_funcall2(wick->link, SYM2ID(wick->argv[0]), wick->argc - 1, &wick->argv[1]);
+  return rb_funcall3(wick->link, SYM2ID(wick->argv[0]), wick->argc - 1, &wick->argv[1]);
 }
 
 /*
