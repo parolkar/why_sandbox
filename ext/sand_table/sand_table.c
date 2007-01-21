@@ -798,6 +798,17 @@ sandbox_eval( self, str )
   return sandbox_run(kit, sandbox_eval_wick(str));
 }
 
+/* :nodoc: */
+void
+check_import_type( klass )
+  VALUE klass;
+{
+  if (!(TYPE(klass) == T_CLASS || TYPE(klass) == T_MODULE))
+  {
+    rb_raise(rb_eTypeError, "wrong argument type (expected Class or Module)");
+  }
+}
+
 /*
  *  call-seq:
  *     sandbox.import(class)   => nil
@@ -811,6 +822,7 @@ sandbox_import( self, klass )
 {
   VALUE sandklass;
   sandkit *kit;
+  check_import_type( klass );
   Data_Get_Struct( self, sandkit, kit );
   sandklass = sandbox_import_class_path( kit, rb_class2name( klass ), 0 );
   return Qnil;
@@ -828,6 +840,7 @@ sandbox_ref( self, klass )
   VALUE self, klass;
 {
   sandkit *kit;
+  check_import_type( klass );
   Data_Get_Struct( self, sandkit, kit );
   sandbox_import_class_path( kit, rb_class2name( klass ), 1 );
   return Qnil;
