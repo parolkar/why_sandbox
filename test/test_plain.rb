@@ -183,4 +183,15 @@ class TestPlain < Test::Unit::TestCase
     assert s.eval("Kernel.respond_to? :load")
     assert ! eval("Kernel.respond_to? :load")
   end
+
+  def test_bad_param
+    s = Sandbox.new
+    assert_raise TypeError do
+      s.ref 0
+    end
+
+    assert_raise TypeError do
+      s.import 0
+    end
+  end
 end
