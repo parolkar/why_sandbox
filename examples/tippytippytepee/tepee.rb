@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 require 'sandbox'
 $:.unshift File.dirname(__FILE__) + "/../../lib"
-%w(open-uri rubygems json redcloth camping camping/session acts_as_versioned hpricot).each { |lib| require lib }
+%w(open-uri rubygems json redcloth camping camping/session acts_as_versioned hpricot cgi).each { |lib| require lib }
 
 Camping.goes :Tepee
 
@@ -163,7 +163,16 @@ module Tepee::Views
       h1 @page.title
       div { m }
       if @boxx
-        div.error! @boxx
+        line_no = (@boxx.to_s.scan(/(\d+)/).flatten[1] || "1").to_i - @line_zero - 1
+        b { div.error! @boxx } #.to_s.gsub(/.eval.:\d+:/, '')
+        pre.plain do
+          @version.body.split("\n").each_with_index do |line, index|
+            n = index+1
+            text = n.to_s + ': ' + CGI::escapeHTML(line)
+            self << div.highlight { text } if (n == line_no)
+            self << text if (n != line_no)
+          end
+        end
       end
       p.actions do 
         _button 'edit',      :href => R(Edit, @version.title, @version.version) 
@@ -237,6 +246,7 @@ module Tepee::Views
   def _eval str
     @no_layout = false
     @boxx = nil
+    @line_zero = 0
     begin
       str.gsub!(/^@\s+([\w\-]+):\s+(.+)$/) do
         @headers[$1] = $2.strip; ''
@@ -244,14 +254,18 @@ module Tepee::Views
       if @headers['Content-Type'] != 'text/html'
         @no_layout = true
       end
-      Tepee::Box.eval "session_id = '#{@cookies.camping_sid}'"
-      str = Tepee::Box.eval %{
+      str_id = @cookies.camping_sid.gsub(/\W/, '')
+      Tepee::Box.eval %{ session_id = '#{str_id}' }
+      code = %{
         Markaby::Builder.new(:env => #{_dump(@env)}, :input => #{_dump(@input)}) do
           def puts(txt); self << txt; end
           ERbLight.new(#{str.dump}).result(binding)
         end.to_s
-      }, :timeout => 5
+      }
+      @line_zero = Tepee::Box.eval(%{__LINE__}) + code.count("\n") # FIXME
+      str = Tepee::Box.eval code, :timeout => 5
     rescue Sandbox::Exception => @boxx
+      "Caught Sandbox::Exception!"
     end
     # RedCloth.new(str, [ :hard_breaks ]).to_html
   end
@@ -319,13 +333,23 @@ a:focus {
 form { display: inline; }
 
 /** Gradient **/
-small, pre, textarea, textfield, button, input, select {
+small, pre, textarea, textfield, button, input, select, blockquote {
    color: #4B4B4C !important;
    background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAAeCAMAAAAxfD/2AAAABGdBTUEAAK/INwWK6QAAABl0RVh0U29mdHdhcmUAQWRvYmUgSW1hZ2VSZWFkeXHJZTwAAAAtUExURfT09PLy8vHx8fv7+/j4+PX19fn5+fr6+vf39/z8/Pb29vPz8/39/f7+/v///0c8Y4oAAAA5SURBVHjaXMZJDgAgCMDAuouA/3+uHPRiMmlKzmhCFRorLOakVnpnDEpBBDHM8ODs/bz372+PAAMAXIQCfD6uIDsAAAAASUVORK5CYII=) !important;
    background-color: #FFF !important;
    background-repeat: repeat-x !important;
    border: 1px solid #CCC !important;
 }
+
+pre.plain {
+   border: 0px
+}
+
+div.highlight {
+   color: #FF0066
+}
+
+div#error { background-color: #FF0066; color: #FFFFFF !important; }
 
 button, input { margin: 3px; }
 
