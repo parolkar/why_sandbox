@@ -131,6 +131,16 @@ module Tepee::Views
         style <<-END, :type => 'text/css'
           body {
             font-family: verdana, arial, sans-serif;
+            min-width: 800px;
+            background:#d7d7d7;
+            text-align: center;
+          }
+          #doc {
+            width: 800px;
+            background:#ffffff;
+            margin-left: auto;
+            margin-right: auto;
+            text-align: left;
           }
           h1, h2, h3, h4, h5 {
             font-weight: normal;
@@ -140,15 +150,17 @@ module Tepee::Views
           }
         END
         body do
-          p do
-            small do
-              span "welcome to " ; a 'tepee', :href => "http://code.whytheluckystiff.net/svn/camping/trunk/examples/tepee.rb"
-              span '. go ' ;       a 'home',  :href => R(Show, 'home')
-              span '. list all ' ; a 'pages', :href => R(List)
+          div :id=>'doc' do
+            p do
+              small do
+                span "welcome to " ; a 'tepee', :href => "http://code.whytheluckystiff.net/svn/camping/trunk/examples/tepee.rb"
+                span '. go ' ;       a 'home',  :href => R(Show, 'home')
+                span '. list all ' ; a 'pages', :href => R(List)
+              end
             end
-          end
-          div.content do
-            self << yield
+            div.content do
+              self << yield
+            end
           end
         end
       end
@@ -157,30 +169,45 @@ module Tepee::Views
     end
   end
 
+  def _show_error(box)
+    if @boxx
+      line_no = (@boxx.to_s.scan(/(\d+)/).flatten[1] || "1").to_i - @line_zero - 1
+      b { div.error! @boxx } #.to_s.gsub(/.eval.:\d+:/, '')
+      pre.plain do
+        @version.body.split("\n").each_with_index do |line, index|
+          n = index+1
+          text = n.to_s + ': ' + CGI::escapeHTML(line)
+          self << div.highlight { text } if (n == line_no)
+          self << text if (n != line_no)
+        end
+      end
+    end
+  end
+
+  def _show_actions
+    small do 
+      span.actions do 
+        text "Version #{@version.version} "
+        text "(current) " if @version.version == @page.version
+        a '«older',   :href => R(Show, @version.title, @version.version-1) unless @version.version == 1 
+        a 'newer»',   :href => R(Show, @version.title, @version.version+1) unless @version.version == @page.version 
+        a 'current',  :href => R(Show, @version.title)                     unless @version.version == @page.version 
+        a 'versions', :href => R(Versions, @page.title) 
+      end
+    end
+  end
+
   def show
     m = _markup @version.body
     unless @no_layout
+      _button 'edit', R(Edit, @version.title, @version.version), { :style=>'float: right; margin: 0 0 5px 5px;', :accesskey => 'e' } if (@version.version == @page.version)
+
       h1 @page.title
       div { m }
-      if @boxx
-        line_no = (@boxx.to_s.scan(/(\d+)/).flatten[1] || "1").to_i - @line_zero - 1
-        b { div.error! @boxx } #.to_s.gsub(/.eval.:\d+:/, '')
-        pre.plain do
-          @version.body.split("\n").each_with_index do |line, index|
-            n = index+1
-            text = n.to_s + ': ' + CGI::escapeHTML(line)
-            self << div.highlight { text } if (n == line_no)
-            self << text if (n != line_no)
-          end
-        end
-      end
-      p.actions do 
-        _button 'edit',      :href => R(Edit, @version.title, @version.version) 
-        _button 'back',      :href => R(Show, @version.title, @version.version-1) unless @version.version == 1 
-        _button 'next',      :href => R(Show, @version.title, @version.version+1) unless @version.version == @page.version 
-        _button 'current',   :href => R(Show, @version.title)                     unless @version.version == @page.version 
-        _button 'versions',  :href => R(Versions, @page.title) 
-      end
+
+      _show_error(@boxx)
+      _button 'edit', R(Edit, @version.title, @version.version), { :style=>'float: right; margin: 5px 0 0 5px;' } if (@version.version == @page.version && @version.body && @version.body.size > 20)
+      p { _show_actions }
     else
       self << m
     end
@@ -189,12 +216,13 @@ module Tepee::Views
   def edit
     h1 @page.title 
     form :method => 'post', :action => R(Edit, @page.title) do
+      input :type => 'submit', :value=>'save' 
       p do
         textarea @page.body, :name => 'post_body', :rows => 30, :cols => 100
       end
       input :type => 'submit', :value=>'save' 
     end
-    _button 'cancel', :href => R(Show, @page.title, @page.version) 
+    _button 'cancel', R(Show, @page.title, @page.version) 
     a 'syntax', :href => 'http://pub.cozmixng.org/~the-rwiki/?cmd=view;name=ERbMemo.en', :target=>'_blank'
   end
 
@@ -211,16 +239,17 @@ module Tepee::Views
       @versions.each do |page|
         li do
           span page.version
-          _button 'show',   :href => R(Show, page.title, page.version)
-          _button 'edit',   :href => R(Edit, page.title, page.version)
+          _button 'show', R(Show, page.title, page.version)
+          _button 'edit', R(Edit, page.title, page.version)
         end
       end
     end
   end
 
-  def _button(text, options={})
-    form :method=>:get, :action=>options[:href] do
-      input :type=>'submit', :name=>'submit', :value=>text
+  def _button(text, href, options={})
+    form :method=>:get, :action=>href do
+      opts = {:type=>'submit', :name=>'submit', :value=>text}.merge(options)
+      input.button opts
     end
   end
 
@@ -350,6 +379,16 @@ div.highlight {
 }
 
 div#error { background-color: #FF0066; color: #FFFFFF !important; }
+
+span.actions a {
+    margin-right: 10px;
+}
+
+/* WIKI CONTENT STYLES */
+.content {
+    padding: 0px 25px 5px 25px;
+    min-height: 300px;
+}
 
 button, input { margin: 3px; }
 
