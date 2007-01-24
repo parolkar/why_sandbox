@@ -1,7 +1,8 @@
 #!/usr/bin/env ruby
 require 'sandbox'
 $:.unshift File.dirname(__FILE__) + "/../../lib"
-%w(open-uri rubygems json redcloth camping camping/session acts_as_versioned hpricot cgi).each { |lib| require lib }
+%w(open-uri rubygems camping camping/session acts_as_versioned
+   json redcloth hpricot cgi pp yaml ostruct).each { |lib| require lib }
 
 Camping.goes :Tepee
 
@@ -64,11 +65,11 @@ Tepee::Box = Sandbox.safe
 Tepee::Box.load "support.rb"
 Tepee::Box.ref Tepee::Models::Page
 Tepee::Box.ref Web
-Tepee::Box.import Time
 Tepee::Box.import URI::HTTP
 Tepee::Box.import OpenURI::Meta
-Tepee::Box.import Hpricot
-Tepee::Box.import HashWithIndifferentAccess
+%w(CGI Time Hpricot HashWithIndifferentAccess
+   PP JSON YAML OpenStruct Sandbox).each { |klass| Tepee::Box.import Kernel.const_get(klass) }
+Tepee::Box.load "webdev.rb"
 
 module Tepee::Controllers
   class Index < R '/'
@@ -171,7 +172,7 @@ module Tepee::Views
 
   def _show_error(box)
     if @boxx
-      line_no = (@boxx.to_s.scan(/(\d+)/).flatten[1] || "1").to_i - @line_zero - 1
+      line_no = (@boxx.to_s.scan(/(\d+)/).flatten[1] || "1").to_i - @line_zero + 1
       b { div.error! @boxx } #.to_s.gsub(/.eval.:\d+:/, '')
       pre.plain do
         @version.body.split("\n").each_with_index do |line, index|
