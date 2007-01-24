@@ -3,7 +3,7 @@
 require 'sandbox'
 require 'test/unit'
 
-class TestExploits < Test::Unit::TestCase
+class TestStdlib < Test::Unit::TestCase
   def path(p)
     File.join(File.dirname(__FILE__), p)
   end

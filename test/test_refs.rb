@@ -34,4 +34,9 @@ class TestRefs < Test::Unit::TestCase
     assert_equal "QUERIED: SELECT * FROM freakyfreaky",
                  @s.eval("TestRefsModule.query('SELECT * FROM freakyfreaky')")
   end
+
+  def test_recursive_sandbox
+    @s.import Sandbox::Safe
+    assert_equal @s.eval(%{s = Sandbox.new; s.eval "2+2"}), 4
+  end
 end
