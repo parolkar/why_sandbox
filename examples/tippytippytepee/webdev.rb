@@ -13,6 +13,7 @@ module Wiki
   end
 
   def self.import(wiki_node)
-    eval self.get_code(wiki_node.to_s)
+    src = self.get_code(wiki_node.to_s)
+    eval src
   end
 end

@@ -115,8 +115,30 @@ module Tepee::Controllers
 
   class Stylesheet < R '/css/tepee.css'
     def get
-@headers['Content-Type'] = 'text/css'
-File.read(__FILE__).gsub(/.*__END__/m, '')
+      @headers['Content-Type'] = 'text/css'
+      File.read(__FILE__).gsub(/.*__END__/m, '')
+    end
+  end
+
+  class Editor < R '/chunky/bacon/editor'
+    def get
+      @no_layout = true
+      render :edit_code
+    end
+  end
+
+  class Static < R '(/static/.+)'
+    MIME_TYPES = {'.css' => 'text/css', '.js' => 'text/javascript', 
+                  '.jpg' => 'image/jpeg', '.png' => 'image/png'}
+    PATH = File.expand_path('.')
+
+    def get(path)
+      @headers['Content-Type'] = MIME_TYPES[path[/\.\w+$/, 0]] || "text/plain"
+      if path.include? '..' || Path.expand_path(PATH+path) !~ /^#{PATH}/
+        "404 - Invalid path" 
+      else
+        @headers['X-Sendfile'] = PATH+path
+      end
     end
   end
 end
@@ -132,12 +154,12 @@ module Tepee::Views
         style <<-END, :type => 'text/css'
           body {
             font-family: verdana, arial, sans-serif;
-            min-width: 800px;
+            min-width: 900px;
             background:#d7d7d7;
             text-align: center;
           }
           #doc {
-            width: 800px;
+            width: 900px;
             background:#ffffff;
             margin-left: auto;
             margin-right: auto;
@@ -217,16 +239,38 @@ module Tepee::Views
   def edit
     h1 @page.title 
     form :method => 'post', :action => R(Edit, @page.title) do
-      input :type => 'submit', :value=>'save' 
+      input :type => 'submit', :value=>'save', :onclick=>'copyCode()'
       p do
-        textarea @page.body, :name => 'post_body', :rows => 30, :cols => 100
+        iframe :id=>'codepress', :name=>'codepress', :src=>'/chunky/bacon/editor', :width=>850, :height=>400
+        br
+        textarea @page.body, :id=>'codepress-onload', :name => 'post_body', :lang=>'ruby'
       end
-      input :type => 'submit', :value=>'save' 
+      script 'function copyCode() { 
+              var txt = document.getElementsByName("post_body")[0];
+              txt.value = CodePress.getCode(); } ', :type => 'text/javascript'
+      input :type => 'submit', :value=>'save', :onclick=>'copyCode()' 
     end
     _button 'cancel', R(Show, @page.title, @page.version) 
     a 'syntax', :href => 'http://pub.cozmixng.org/~the-rwiki/?cmd=view;name=ERbMemo.en', :target=>'_blank'
   end
 
+  def edit_code
+    html do
+      head do
+        link :href=>'/static/codepress.css', :rel=>'stylesheet', :type=>'text/css'
+        link :href=>'/static/languages/codepress-ruby.css', :rel=>'stylesheet', 
+             :type=>'text/css', :id=>'cp-lang-style'
+        script :type=>'text/javascript', :src=>'/static/codepress.js'
+        script :type=>'text/javascript', :src=>'/static/languages/codepress-ruby.js'
+        script "CodePress.language = 'ruby';", :type=>'text/javascript'
+      end
+      body :id=>'ffedt' do
+        pre :id=>'ieedt' do
+        end
+      end
+    end
+  end
+  
   def list
     h1 'all pages'
     ul { @pages.each { |p| 
@@ -306,12 +350,15 @@ def Tepee.create
   Tepee::Models::Session.create_schema
 end
 
-require 'mongrel/camping'
-Tepee::Models::Base.establish_connection :adapter => 'sqlite3', :database => ENV['HOME'] + '/.camping.db'
-Tepee::Models::Base.threaded_connections=false
+if __FILE__ == $0
+  require 'mongrel/camping'
+  Tepee::Models::Base.establish_connection :adapter => 'sqlite3', :database => ENV['HOME'] + '/.camping.db'
+  Tepee::Models::Base.logger = Logger.new('tepee.log')
+  Tepee::Models::Base.threaded_connections=false
   
-s = Mongrel::Camping.start('0.0.0.0', 3300, '/', Tepee)
-s.run.join
+  s = Mongrel::Camping.start('0.0.0.0', 3300, '/', Tepee)
+  s.run.join
+end
 
 __END__
 /** focus **/
