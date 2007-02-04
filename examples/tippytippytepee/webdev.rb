@@ -6,14 +6,24 @@ module REST
 end 
 
 module Wiki
+ 
+  # find the <code> tag and include everything inside
   def self.get_code(uri)
     code = Hpricot(Web.get(uri)).at("code")
     return nil if code.nil?
     code.inner_html 
   end
+  
+  def self.get(wiki_node)
+    Web.get(wiki_node)
+  end
+  def self.get_source(wiki_node)
+    Jungle.get_source(wiki_node)
+  end
 
   def self.import(wiki_node)
-    src = self.get_code(wiki_node.to_s)
+    src = Jungle.get_source(wiki_node.to_s)
     eval src
   end
+
 end

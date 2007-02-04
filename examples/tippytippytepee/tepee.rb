@@ -35,6 +35,16 @@ module Tepee
   include Camping::Session
 end
 
+# Jungle module contains non-sandboxed code
+# that is called from sandboxed code in the wiki
+module Jungle
+  # Retrieve a wiki node's raw text
+  def self.get_source(wiki_node)
+    Tepee.get(:Source,wiki_node).body.to_s
+  end
+end
+
+
 module Tepee::Models
 
   class Page < Base
@@ -65,6 +75,7 @@ Tepee::Box = Sandbox.safe
 Tepee::Box.load "support.rb"
 Tepee::Box.ref Tepee::Models::Page
 Tepee::Box.ref Web
+Tepee::Box.ref Jungle
 Tepee::Box.import URI::HTTP
 Tepee::Box.import OpenURI::Meta
 %w(CGI Time Hpricot HashWithIndifferentAccess
@@ -95,6 +106,15 @@ module Tepee::Controllers
     
     def post page_name
       Page.find_or_create_by_title(page_name).update_attributes :body => input.post_body and redirect Show, page_name
+    end
+  end
+    
+  class Source < R '/(\w+)/source', '/(\w+)/(\d+)/source' 
+    def get page_name, version = nil
+      @page = Page.find_by_title(page_name)
+      @version = (version.nil? or version == @page.version.to_s) ? @page : @page.versions.find_by_version(version)
+      @no_layout=true
+      render :source
     end
   end
 
@@ -236,6 +256,10 @@ module Tepee::Views
     end
   end
 
+  def source
+    self << @version.body
+  end
+
   def edit
     h1 @page.title 
     form :method => 'post', :action => R(Edit, @page.title) do
@@ -337,7 +361,7 @@ module Tepee::Views
         end.to_s
       }
       @line_zero = Tepee::Box.eval(%{__LINE__}) + code.count("\n") # FIXME
-      str = Tepee::Box.eval code, :timeout => 5
+      str = Tepee::Box.eval code, :timeout => 10
     rescue Sandbox::Exception => @boxx
       "Caught Sandbox::Exception!"
     end
