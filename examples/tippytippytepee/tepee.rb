@@ -282,11 +282,11 @@ module Tepee::Views
   def edit_code
     html do
       head do
-        link :href=>'/static/codepress.css', :rel=>'stylesheet', :type=>'text/css'
-        link :href=>'/static/languages/codepress-ruby.css', :rel=>'stylesheet', 
+        link :href=>URL('/static/codepress.css'), :rel=>'stylesheet', :type=>'text/css'
+        link :href=>URL('/static/languages/codepress-ruby.css'), :rel=>'stylesheet', 
              :type=>'text/css', :id=>'cp-lang-style'
-        script :type=>'text/javascript', :src=>'/static/codepress.js'
-        script :type=>'text/javascript', :src=>'/static/languages/codepress-ruby.js'
+        script :type=>'text/javascript', :src=>URL('/static/codepress.js')
+        script :type=>'text/javascript', :src=>URL('/static/languages/codepress-ruby.js')
         script "CodePress.language = 'ruby';", :type=>'text/javascript'
       end
       body :id=>'ffedt' do
@@ -385,7 +385,7 @@ end
 
 def Tepee.create
   Tepee::Models.create_schema :assume => (Tepee::Models::Page.table_exists? ? 1.0 : 0.0)
-  Tepee::Models::Session.create_schema
+  # Tepee::Models::Session.create_schema
 end
 
 if __FILE__ == $0
