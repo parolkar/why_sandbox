@@ -72,7 +72,7 @@ module Tepee::Models
 end
 
 Tepee::Box = Sandbox.safe
-Tepee::Box.load "support/support.rb"
+Tepee::Box.load "support/markup.rb"
 Tepee::Box.ref Tepee::Models::Page
 Tepee::Box.ref Web
 Tepee::Box.ref Jungle
