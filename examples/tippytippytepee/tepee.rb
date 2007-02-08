@@ -72,7 +72,7 @@ module Tepee::Models
 end
 
 Tepee::Box = Sandbox.safe
-Tepee::Box.load "support.rb"
+Tepee::Box.load "support/support.rb"
 Tepee::Box.ref Tepee::Models::Page
 Tepee::Box.ref Web
 Tepee::Box.ref Jungle
@@ -80,7 +80,7 @@ Tepee::Box.import URI::HTTP
 Tepee::Box.import OpenURI::Meta
 %w(CGI Time Hpricot HashWithIndifferentAccess
    PP JSON YAML OpenStruct Sandbox).each { |klass| Tepee::Box.import Kernel.const_get(klass) }
-Tepee::Box.load "webdev.rb"
+Tepee::Box.load "support/webdev.rb"
 
 module Tepee::Controllers
   class Index < R '/'
