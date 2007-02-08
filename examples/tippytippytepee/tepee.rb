@@ -93,6 +93,7 @@ module Tepee::Controllers
     def get page_name, version = nil
       redirect(Edit, page_name, 1) and return unless @page = Page.find_by_title(page_name)
       @version = (version.nil? or version == @page.version.to_s) ? @page : @page.versions.find_by_version(version)
+      @cgi_parameters = CGI::parse(@env.REQUEST_URI.split('?')[-1])
       render :show
     end
   end
@@ -352,13 +353,26 @@ module Tepee::Views
       if @headers['Content-Type'] != 'text/html'
         @no_layout = true
       end
-      str_id = @cookies.camping_sid.gsub(/\W/, '')
-      Tepee::Box.eval %{ session_id = '#{str_id}' }
       code = %{
-        Markaby::Builder.new(:env => #{_dump(@env)}, :input => #{_dump(@input)}) do
+        instance_vars = {
+          :env => #{_dump(@env)}, :input => #{_dump(@input)}, 
+          :args => #{_dump(@cgi_parameters)}, 
+          :session_id => #{_dump(@cookies.camping_sid)} 
+        }
+        
+        doc = Markaby::Builder.new(instance_vars) do
           def puts(txt); self << txt; end
           ERbLight.new(#{str.dump}).result(binding)
         end.to_s
+        
+        meth = instance_vars[:args]['method']
+        
+        if meth.empty?
+          doc
+        else
+          args = OpenStruct.new(instance_vars[:args])
+          #{@page.title.gsub(/^./) {|c| c.upcase} }.send(meth[0], args)
+        end
       }
       @line_zero = Tepee::Box.eval(%{__LINE__}) + code.count("\n") # FIXME
       str = Tepee::Box.eval code, :timeout => 10
