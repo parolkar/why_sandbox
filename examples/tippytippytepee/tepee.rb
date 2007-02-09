@@ -217,6 +217,7 @@ module Tepee::Views
     if @boxx
       line_no = (@boxx.to_s.scan(/(\d+)/).flatten[1] || "1").to_i - @line_zero + 1
       b { div.error! @boxx } #.to_s.gsub(/.eval.:\d+:/, '')
+      pre { @boxx.backtrace.join("\n") }
       pre.plain do
         @version.body.split("\n").each_with_index do |line, index|
           n = index+1
@@ -356,16 +357,16 @@ module Tepee::Views
       code = %{
         instance_vars = {
           :env => #{_dump(@env)}, :input => #{_dump(@input)}, 
-          :args => #{_dump(@cgi_parameters)}, 
-          :session_id => #{_dump(@cookies.camping_sid)} 
+          :params => #{_dump(@cgi_parameters)}, 
+          :session_id => #{_dump(@cookies.camping_sid)}
         }
         
         doc = Markaby::Builder.new(instance_vars) do
           def puts(txt); self << txt; end
           ERbLight.new(#{str.dump}).result(binding)
         end.to_s
-        
-        meth = instance_vars[:args]['method']
+
+        meth = instance_vars[:params]['method']
         
         if meth.empty?
           doc
