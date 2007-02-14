@@ -29,6 +29,17 @@ module Web
       data
     end
   end
+  
+  def self.post(url, data, headers = nil)
+    uri = URI.parse(url)
+    res = Net::HTTP.new(uri.host, uri.port).post(uri.path, data, headers)
+    res.body
+  end
+  
+  def self.post_form(url, params)
+    res = Net::HTTP.post_form(URI.parse(url), params)
+    res.body
+  end
 end
 
 module Tepee
@@ -77,6 +88,7 @@ Tepee::Box.ref Tepee::Models::Page
 Tepee::Box.ref Web
 Tepee::Box.ref Jungle
 Tepee::Box.import URI::HTTP
+Tepee::Box.import Net::HTTP
 Tepee::Box.import OpenURI::Meta
 %w(CGI Time Hpricot HashWithIndifferentAccess
    PP JSON YAML OpenStruct Sandbox).each { |klass| Tepee::Box.import Kernel.const_get(klass) }
