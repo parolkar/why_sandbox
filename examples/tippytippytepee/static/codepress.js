@@ -9,7 +9,6 @@
  * Read the full licence: http://www.opensource.org/licenses/lgpl-license.php
  *
  * This is a slightly modified copy of version 0.8.15 (13 january 2007).
- * A few lines here and in the CSS were modified to use 'static' as a prefix.
  */
 
 CodePress = {
@@ -206,9 +205,9 @@ CodePress = {
 	   	head = document.getElementsByTagName('head')[0];
 	   	script = document.createElement('script');
 	   	script.type = 'text/javascript';
-	   	script.src = '/static/languages/codepress-'+language+'.js';
+	   	script.src = 'languages/codepress-'+language+'.js';
 		head.appendChild(script)
-		document.getElementById('cp-lang-style').href = '/static/languages/codepress-'+language+'.css';
+		document.getElementById('cp-lang-style').href = 'languages/codepress-'+language+'.css';
 		code = code.replace(/\u2009/gi,'');
 		code = code.replace(/&/gi,'&amp;');		
        	code = code.replace(/</g,'&lt;');

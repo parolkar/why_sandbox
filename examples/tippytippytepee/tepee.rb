@@ -2,7 +2,7 @@
 require 'sandbox'
 $:.unshift File.dirname(__FILE__) + "/../../lib"
 %w(open-uri rubygems camping camping/session acts_as_versioned
-   json redcloth hpricot cgi pp yaml ostruct).each { |lib| require lib }
+   json redcloth hpricot cgi pp yaml ostruct net/http).each { |lib| require lib }
 
 Camping.goes :Tepee
 
@@ -360,7 +360,8 @@ module Tepee::Views
     @boxx = nil
     @line_zero = 0
     begin
-      str.gsub!(/^@\s+([\w\-]+):\s+(.+)$/) do
+      # Sandboxed script may want to specify {@ Content-Type = 'text/xml'}
+      str.gsub!(/^@\s+([\w\-]+):\s+([^\r]+)\r\n/m) do
         @headers[$1] = $2.strip; ''
       end
       if @headers['Content-Type'] != 'text/html'
