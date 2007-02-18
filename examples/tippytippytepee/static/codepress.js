@@ -205,9 +205,9 @@ CodePress = {
 	   	head = document.getElementsByTagName('head')[0];
 	   	script = document.createElement('script');
 	   	script.type = 'text/javascript';
-	   	script.src = 'languages/codepress-'+language+'.js';
+	   	script.src = '../static/languages/codepress-'+language+'.js';
 		head.appendChild(script)
-		document.getElementById('cp-lang-style').href = 'languages/codepress-'+language+'.css';
+		document.getElementById('cp-lang-style').href = '../static/languages/codepress-'+language+'.css';
 		code = code.replace(/\u2009/gi,'');
 		code = code.replace(/&/gi,'&amp;');		
        	code = code.replace(/</g,'&lt;');

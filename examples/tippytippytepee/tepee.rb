@@ -1,8 +1,14 @@
 #!/usr/bin/env ruby
+#
+# The tippy tippy tepee is a Camping-based sandboxed scriptable wiki.
+#
+# You can run it directly, or install it as a mouseHole 2 app.
+# 
+#
 require 'sandbox'
 $:.unshift File.dirname(__FILE__) + "/../../lib"
 %w(open-uri rubygems camping camping/session acts_as_versioned
-   json redcloth hpricot cgi pp yaml ostruct net/http).each { |lib| require lib }
+   json redcloth hpricot cgi pp yaml ostruct net/http sqlite3).each { |lib| require lib }
 
 Camping.goes :Tepee
 
@@ -153,7 +159,7 @@ module Tepee::Controllers
     end
   end
 
-  class Editor < R '/chunky/bacon/editor'
+  class Editor < R '/chunkybacon/editor'
     def get
       @no_layout = true
       render :edit_code
@@ -279,7 +285,7 @@ module Tepee::Views
     form :method => 'post', :action => R(Edit, @page.title) do
       input :type => 'submit', :value=>'save', :onclick=>'copyCode()'
       p do
-        iframe :id=>'codepress', :name=>'codepress', :src=>'/chunky/bacon/editor', :width=>850, :height=>400
+        iframe :id=>'codepress', :name=>'codepress', :src=>'/chunkybacon/editor', :width=>850, :height=>400
         br
         textarea @page.body, :id=>'codepress-onload', :name => 'post_body', :lang=>'ruby'
       end
@@ -360,7 +366,7 @@ module Tepee::Views
     @boxx = nil
     @line_zero = 0
     begin
-      # Sandboxed script may want to specify {@ Content-Type = 'text/xml'}
+      # Sandboxed script may want to specify {@ Content-Type: 'text/xml'}
       str.gsub!(/^@\s+([\w\-]+):\s+([^\r]+)\r\n/m) do
         @headers[$1] = $2.strip; ''
       end
@@ -398,8 +404,8 @@ module Tepee::Views
 end
 
 def Tepee.create
+  Camping::Models::Session.create_schema
   Tepee::Models.create_schema :assume => (Tepee::Models::Page.table_exists? ? 1.0 : 0.0)
-  # Tepee::Models::Session.create_schema
 end
 
 if __FILE__ == $0
@@ -407,8 +413,10 @@ if __FILE__ == $0
   Tepee::Models::Base.establish_connection :adapter => 'sqlite3', :database => ENV['HOME'] + '/.camping.db'
   Tepee::Models::Base.logger = Logger.new('tepee.log')
   Tepee::Models::Base.threaded_connections=false
-  
-  s = Mongrel::Camping.start('0.0.0.0', 3300, '/', Tepee)
+  Tepee.create
+  port = 3300
+  s = Mongrel::Camping.start('0.0.0.0', port, '/', Tepee)
+  puts "** tippy tippy tepee running on port #{port}"
   s.run.join
 end
 
