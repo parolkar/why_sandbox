@@ -272,7 +272,7 @@ sandbox_initialize(argc, argv, self)
         SAND_INIT(env);
         SAND_INIT(real);
       } else {
-        rb_raise(rb_eArgError, "no %s module for the sandbox", mod);
+        rb_raise(rb_eArgError, "no '%s' module available for the sandbox", RSTRING(rb_inspect(mod))->ptr);
       }
     }
   }
