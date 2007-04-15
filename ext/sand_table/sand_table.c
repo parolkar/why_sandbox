@@ -622,6 +622,8 @@ sandbox_arg_prep(kit, obj)
   sandkit *kit;
   VALUE obj;
 {
+  VALUE link;
+  VALUE klass;
   sandtransfer *t = alloc_sandtransfer();
   t->trans = TRANS_NONE;
   if (SPECIAL_CONST_P(obj))
@@ -630,7 +632,7 @@ sandbox_arg_prep(kit, obj)
     return (VALUE)t;
   }
 
-  VALUE link = sandbox_get_linked_class(obj);
+  link = sandbox_get_linked_class(obj);
   if (!NIL_P(link))
   {
     VALUE box = sandbox_get_linked_box(obj);
@@ -641,7 +643,7 @@ sandbox_arg_prep(kit, obj)
     }
   }
 
-  VALUE klass = Qnil;
+  klass = Qnil;
   link = Qnil;
   if (rb_type(obj) == T_OBJECT) {
     klass = sandbox_const_find(kit, rb_obj_classname(obj));
@@ -954,6 +956,8 @@ Init_kit(kit, use_base)
   int use_base;
 {
   VALUE metaclass;
+  VALUE norm_cFloat;
+  VALUE rb_mMarshal;
 
   kit->tbl = st_init_numtable();
   kit->globals = st_init_numtable();
@@ -2145,7 +2149,7 @@ Init_kit(kit, use_base)
 
   kit->mMath = sandbox_defmodule(kit, "Math");
 
-  VALUE norm_cFloat = rb_cFloat;
+  norm_cFloat = rb_cFloat;
   rb_cFloat = kit->cFloat;
   rb_define_const(kit->mMath, "PI", rb_float_new(atan(1.0)*4.0));
   rb_define_const(kit->mMath, "E", rb_float_new(exp(1.0)));
@@ -2181,7 +2185,7 @@ Init_kit(kit, use_base)
   SAND_COPY_S(mMath, "erf");
   SAND_COPY_S(mMath, "erfc");
 
-  VALUE rb_mMarshal = rb_const_get(rb_cObject, rb_intern("Marshal"));
+  rb_mMarshal = rb_const_get(rb_cObject, rb_intern("Marshal"));
   kit->mMarshal = sandbox_defmodule(kit, "Marshal");
 
   SAND_COPY_S(mMarshal, "dump");
@@ -2258,6 +2262,8 @@ Init_kit_io(kit, use_base)
   sandkit *kit;
   int use_base;
 {
+  VALUE rb_mFConst;
+  
   kit->eIOError = sandbox_defclass(kit, "IOError", kit->eStandardError);
   kit->eEOFError = sandbox_defclass(kit, "EOFError", kit->eIOError);
 
@@ -2439,7 +2445,7 @@ Init_kit_io(kit, use_base)
 
   SAND_COPY(cFile, "flock");
 
-  VALUE rb_mFConst = rb_const_get_at(rb_cFile, rb_intern("Constants"));
+  rb_mFConst = rb_const_get_at(rb_cFile, rb_intern("Constants"));
   kit->mFConst = sandbox_defmodule_under(kit, kit->cFile, "Constants");
   rb_include_module(kit->cIO, kit->mFConst);
   SAND_COPY_CONST(mFConst, "LOCK_SH");
@@ -2662,6 +2668,14 @@ Init_kit_real(kit, use_base)
   int use_base;
 {
   VALUE cThGroup;
+  VALUE rb_cThGroup;
+  VALUE rb_cProcStatus;
+  VALUE rb_mProcess;
+  VALUE rb_mProcUID;
+  VALUE rb_mProcGID;
+  VALUE rb_mProcID_Syscall;
+  VALUE rb_mObSpace;
+
 
   /* FIXME: reimplement */
   SAND_COPY_KERNEL("abort");
@@ -2730,7 +2744,7 @@ Init_kit_real(kit, use_base)
   SAND_COPY(cCont, "[]");
   SAND_COPY_KERNEL("callcc");
 
-  VALUE rb_cThGroup = rb_const_get_at(rb_cObject, rb_intern("ThreadGroup"));
+  rb_cThGroup = rb_const_get_at(rb_cObject, rb_intern("ThreadGroup"));
   kit->cThGroup = sandbox_defclass(kit, "ThreadGroup", kit->cObject);
   SAND_COPY_ALLOC(cThGroup);
   SAND_COPY(cThGroup, "list");
@@ -2793,7 +2807,7 @@ Init_kit_real(kit, use_base)
   SAND_COPY_KERNEL("system");
   SAND_COPY_KERNEL("sleep");
 
-  VALUE rb_mProcess = rb_const_get_at(rb_cObject, rb_intern("Process"));
+  rb_mProcess = rb_const_get_at(rb_cObject, rb_intern("Process"));
   kit->mProcess = sandbox_defmodule(kit, "Process");
   SAND_COPY_CONST(mProcess, "WNOHANG");
   SAND_COPY_CONST(mProcess, "WUNTRACED");
@@ -2811,7 +2825,7 @@ Init_kit_real(kit, use_base)
   SAND_COPY_S(mProcess, "waitall");
   SAND_COPY_S(mProcess, "detach");
 
-  VALUE rb_cProcStatus = rb_const_get_at(rb_mProcess, rb_intern("Status"));
+  rb_cProcStatus = rb_const_get_at(rb_mProcess, rb_intern("Status"));
   kit->cProcStatus = sandbox_defclass_under(kit, kit->mProcess, "Status", kit->cObject);
   SAND_UNDEF(cProcStatus, "new");
 
@@ -2890,8 +2904,8 @@ Init_kit_real(kit, use_base)
   SAVED_GROUP_ID = getegid();
   */
 
-  VALUE rb_mProcUID = rb_const_get_at(rb_mProcess, rb_intern("UID"));
-  VALUE rb_mProcGID = rb_const_get_at(rb_mProcess, rb_intern("GID"));
+  rb_mProcUID = rb_const_get_at(rb_mProcess, rb_intern("UID"));
+  rb_mProcGID = rb_const_get_at(rb_mProcess, rb_intern("GID"));
   kit->mProcUID = sandbox_defmodule_under(kit, kit->mProcess, "UID");
   kit->mProcGID = sandbox_defmodule_under(kit, kit->mProcess, "GID");
 
@@ -2916,7 +2930,7 @@ Init_kit_real(kit, use_base)
   SAND_COPY_S(mProcUID, "switch");
   SAND_COPY_S(mProcGID, "switch");
 
-  VALUE rb_mProcID_Syscall = rb_const_get_at(rb_mProcess, rb_intern("Sys"));
+  rb_mProcID_Syscall = rb_const_get_at(rb_mProcess, rb_intern("Sys"));
   kit->mProcID_Syscall = sandbox_defmodule_under(kit, kit->mProcess, "Sys");
 
   SAND_COPY_S(mProcID_Syscall, "getuid");
@@ -2946,7 +2960,7 @@ Init_kit_real(kit, use_base)
   SAND_COPY_S(mGC, "disable");
   SAND_COPY(mGC, "garbage_collect");
 
-  VALUE rb_mObSpace = rb_const_get_at(rb_cObject, rb_intern("ObjectSpace"));
+  rb_mObSpace = rb_const_get_at(rb_cObject, rb_intern("ObjectSpace"));
   kit->mObSpace = sandbox_defmodule(kit, "ObjectSpace");
   SAND_COPY_S(mObSpace, "each_object");
   SAND_COPY_S(mObSpace, "garbage_collect");
