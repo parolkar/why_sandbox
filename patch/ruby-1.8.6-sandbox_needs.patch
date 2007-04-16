@@ -1,0 +1,52 @@
+diff -wur ruby-1.8.6/error.c ruby-1.8.6-sandbox/error.c
+--- ruby-1.8.6/error.c	2007-02-12 15:01:19.000000000 -0500
++++ ruby-1.8.6-sandbox/error.c	2007-04-16 08:06:08.000000000 -0500
+@@ -827,7 +827,7 @@
+  *     Errno.constants   #=> E2BIG, EACCES, EADDRINUSE, EADDRNOTAVAIL, ...
+  */
+ 
+-static st_table *syserr_tbl;
++st_table *rb_syserr_tbl;
+ 
+ static VALUE
+ set_syserr(n, name)
+@@ -836,10 +836,10 @@
+ {
+     VALUE error;
+ 
+-    if (!st_lookup(syserr_tbl, n, &error)) {
++    if (!st_lookup(rb_syserr_tbl, n, &error)) {
+ 	error = rb_define_class_under(rb_mErrno, name, rb_eSystemCallError);
+ 	rb_define_const(error, "Errno", INT2NUM(n));
+-	st_add_direct(syserr_tbl, n, error);
++	st_add_direct(rb_syserr_tbl, n, error);
+     }
+     else {
+ 	rb_define_const(rb_mErrno, name, error);
+@@ -853,7 +853,7 @@
+ {
+     VALUE error;
+ 
+-    if (!st_lookup(syserr_tbl, n, &error)) {
++    if (!st_lookup(rb_syserr_tbl, n, &error)) {
+ 	char name[8];	/* some Windows' errno have 5 digits. */
+ 
+ 	snprintf(name, sizeof(name), "E%03d", n);
+@@ -891,7 +891,7 @@
+ 	if (argc == 1 && FIXNUM_P(mesg)) {
+ 	    error = mesg; mesg = Qnil;
+ 	}
+-	if (!NIL_P(error) && st_lookup(syserr_tbl, NUM2LONG(error), &klass)) {
++	if (!NIL_P(error) && st_lookup(rb_syserr_tbl, NUM2LONG(error), &klass)) {
+ 	    /* change class */
+ 	    if (TYPE(self) != T_OBJECT) { /* insurance to avoid type crash */
+ 		rb_raise(rb_eTypeError, "invalid instance type");
+@@ -1031,7 +1031,7 @@
+     rb_eSecurityError = rb_define_class("SecurityError", rb_eStandardError);
+     rb_eNoMemError = rb_define_class("NoMemoryError", rb_eException);
+ 
+-    syserr_tbl = st_init_numtable();
++    rb_syserr_tbl = st_init_numtable();
+     rb_eSystemCallError = rb_define_class("SystemCallError", rb_eStandardError);
+     rb_define_method(rb_eSystemCallError, "initialize", syserr_initialize, -1);
+     rb_define_method(rb_eSystemCallError, "errno", syserr_errno, 0);
