@@ -11,6 +11,10 @@
 
 #define SAND_REV_ID "$Rev$"
 
+#ifndef rb_curr_thread
+#define curr_thread rb_curr_thread
+#endif
+
 VALUE ruby_sandbox = Qnil;
 static sandkit real;
 static sandkit base;
