@@ -15,9 +15,11 @@ VALUE ruby_sandbox = Qnil;
 static sandkit real;
 static sandkit base;
 
-static VALUE Qimport, Qinit, Qload, Qenv, Qio, Qreal, Qref, Qall;
+static VALUE Qimport, Qcopy, Qinit, Qload, Qenv, Qio, Qreal, Qref, Qall;
 VALUE rb_cSandbox, rb_cSandboxFull, rb_cSandboxSafe, rb_eSandboxException, rb_cSandboxRef, rb_cSandboxWick, rb_cSandboxTransfer;
-static ID s_options;
+static ID s_options, s_to_s, s_copy_ivar;
+
+static VALUE old_toplevel;
 
 static VALUE sandbox_run_begin(VALUE wick);
 static VALUE sandbox_run_wick(VALUE v);
@@ -366,6 +368,8 @@ free_sandwick(wick)
   sandwick *wick;
 {
   rb_gc_unregister_address(&wick->self);
+  if (wick->calltype == SANDBOX_COPY)
+    free(wick->argv);
   free(wick);
 }
 
@@ -396,6 +400,27 @@ alloc_sandwick()
  * sandbox.
  */
 sandwick *
+sandbox_copy_wick(link, obj_name, obj)
+  VALUE link;
+  VALUE obj_name;
+  VALUE obj;
+{
+  sandwick *wick = alloc_sandwick();
+  wick->calltype = SANDBOX_COPY;
+  wick->link = link;
+  wick->argc = 2;
+  wick->argv = malloc(sizeof(VALUE) * 2);
+  wick->argv[0] = obj_name;
+  wick->argv[1] = obj;
+  return wick;
+}
+
+/*
+ * A "wick" for starting a sandbox that calls
+ * a method of a linked object inside that same
+ * sandbox.
+ */
+sandwick *
 sandbox_method_wick(link, argc, argv)
   VALUE link;
   int argc;
@@ -417,6 +442,26 @@ sandbox_run_method_call(wick)
   sandwick *wick;
 {
   return rb_funcall3(wick->link, SYM2ID(wick->argv[0]), wick->argc - 1, &wick->argv[1]);
+}
+
+static VALUE
+sandbox_run_copy(wick)
+  sandwick *wick;
+{
+  char *eval = NULL;
+  VALUE str = wick->argv[0];
+  rb_ivar_set(ruby_top_self, s_copy_ivar, wick->argv[1]);
+
+  str = rb_funcall(str, s_to_s, 0);
+  StringValue(str);
+  eval = ALLOC_N(char, RSTRING_LEN(str) + 20);
+  sprintf(eval, "%s = @____SANDBOX_COPY", RSTRING_PTR(str));
+
+  str = rb_eval_string(eval);
+
+  rb_ivar_set(ruby_top_self, s_copy_ivar, Qnil);
+  free(eval);
+  return str;
 }
 
 /*
@@ -591,6 +636,8 @@ sandbox_on( kit, wick )
 
   wick->exception = Qnil;
   wick->kit = kit;
+
+  wick->old_toplevel = ruby_top_self;
 }
 
 /*
@@ -607,6 +654,7 @@ sandbox_off( wick )
   ruby_scope = wick->scope;
   ruby_dyna_vars = wick->dyna_vars;
   curr_thread->sandbox = ruby_sandbox;
+  ruby_top_self = wick->old_toplevel;
 }
 
 /*
@@ -705,6 +753,7 @@ sandbox_run_wick(v)
   if (!rb_const_defined(rb_cObject, rb_intern("TOPLEVEL_BINDING"))) {
     rb_const_set(rb_cObject, rb_intern("TOPLEVEL_BINDING"), rb_eval_string("binding"));
   }
+  ruby_top_self = rb_const_get(rb_cObject, rb_intern("TOPLEVEL_BINDING"));
   switch (wick->calltype)
   {
     case SANDBOX_EVAL:
@@ -715,6 +764,9 @@ sandbox_run_wick(v)
       break;
     case SANDBOX_ACTION:
       obj = sandbox_run_action(wick);
+      break;
+    case SANDBOX_COPY:
+      obj = sandbox_run_copy(wick);
       break;
   }
 
@@ -789,6 +841,20 @@ sandbox_run(kit, wick)
   obj = rb_ensure(sandbox_run_begin, (VALUE)wick, sandbox_run_ensure, (VALUE)wick);
   return sandbox_arg_load(obj);
 }
+
+/* :nodoc: */
+VALUE sandbox_copy( self, obj_name, obj )
+  VALUE self;
+  VALUE obj_name;
+  VALUE obj;
+{
+  VALUE link;
+  sandkit *kit;
+  Data_Get_Struct( self, sandkit, kit );
+  link = Qnil;//sandbox_get_linked_class(self);
+  return sandbox_run(kit, sandbox_copy_wick(link, obj_name, obj));
+}
+
 
 /* :nodoc: */
 VALUE
@@ -3057,6 +3123,7 @@ void Init_sand_table()
   rb_define_method( rb_cSandboxFull, "_eval", sandbox_eval, 1 );
   rb_define_method( rb_cSandboxFull, "import", sandbox_import, 1 );
   rb_define_method( rb_cSandboxFull, "ref", sandbox_ref, 1 );
+  rb_define_method( rb_cSandboxFull, "copy", sandbox_copy, 2 );
   rb_define_method( rb_cSandboxFull, "main", sandbox_get_main, 0 );
   rb_define_singleton_method( rb_cSandbox, "new", sandbox_new, -1 );
   rb_define_singleton_method( rb_cSandbox, "safe", sandbox_safe, -1 );
@@ -3067,9 +3134,12 @@ void Init_sand_table()
   rb_cSandboxWick = rb_define_class_under(rb_cSandbox, "Wick", rb_cObject);
   rb_cSandboxTransfer = rb_define_class_under(rb_cSandbox, "Transfer", rb_cObject);
 
+  s_copy_ivar = rb_intern("@____SANDBOX_COPY");
   s_options = rb_intern("@options");
+  s_to_s = rb_intern("to_s");
   Qinit = ID2SYM(rb_intern("init"));
   Qimport = ID2SYM(rb_intern("import"));
+  Qcopy = ID2SYM(rb_intern("copy"));
   Qload = ID2SYM(rb_intern("load"));
   Qenv = ID2SYM(rb_intern("env"));
   Qreal = ID2SYM(rb_intern("real"));

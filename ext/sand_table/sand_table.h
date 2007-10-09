@@ -165,6 +165,7 @@ typedef struct SANDKIT {
 #define SANDBOX_EVAL        10
 #define SANDBOX_METHOD_CALL 11
 #define SANDBOX_ACTION      12
+#define SANDBOX_COPY        13
 
 /* The sandwick struct is just the old go_cart struct,
  * but I want its initalization and execution methods
@@ -187,6 +188,7 @@ typedef struct {
   VALUE exception;
   sandkit *kit;
   VALUE banished;
+  VALUE old_toplevel;
   struct SCOPE *scope;
   struct RVarmap *dyna_vars;
 } sandwick;

@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby
+#! /home/why/sand/RUBY-1_8_6/bin/ruby
 require 'irb'
 require 'sandbox/server'
 
