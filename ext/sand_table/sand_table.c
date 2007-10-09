@@ -19,9 +19,9 @@ VALUE ruby_sandbox = Qnil;
 static sandkit real;
 static sandkit base;
 
-static VALUE Qimport, Qcopy, Qinit, Qload, Qenv, Qio, Qreal, Qref, Qall;
+static VALUE Qimport, Qset, Qinit, Qload, Qenv, Qio, Qreal, Qref, Qall;
 VALUE rb_cSandbox, rb_cSandboxFull, rb_cSandboxSafe, rb_eSandboxException, rb_cSandboxRef, rb_cSandboxWick, rb_cSandboxTransfer;
-static ID s_options, s_to_s, s_copy_ivar, s_marshal_dump;
+static ID s_options, s_to_s, s_set_ivar, s_marshal_dump;
 
 static VALUE old_toplevel;
 
@@ -372,7 +372,7 @@ free_sandwick(wick)
   sandwick *wick;
 {
   rb_gc_unregister_address(&wick->self);
-  if (wick->calltype == SANDBOX_COPY)
+  if (wick->calltype == SANDBOX_SET)
     free(wick->argv);
   free(wick);
 }
@@ -486,13 +486,13 @@ sandbox_run_action(wick)
  * Objects are appropriately marshalled or ref'd.
  */
 sandwick *
-sandbox_copy_wick(link, obj_name, obj)
+sandbox_set_wick(link, obj_name, obj)
   VALUE link;
   VALUE obj_name;
   VALUE obj;
 {
   sandwick *wick = alloc_sandwick();
-  wick->calltype = SANDBOX_COPY;
+  wick->calltype = SANDBOX_SET;
   wick->link = link;
   wick->argc = 2;
   wick->argv = malloc(sizeof(VALUE) * 2);
@@ -502,24 +502,24 @@ sandbox_copy_wick(link, obj_name, obj)
 }
 
 /*
- * Runs the copy action.
+ * Runs the set action.
  */
 static VALUE
-sandbox_run_copy(wick)
+sandbox_run_set(wick)
   sandwick *wick;
 {
   char *eval = NULL;
   VALUE str = wick->argv[0];
-  rb_ivar_set(ruby_top_self, s_copy_ivar, wick->argv[1]);
+  rb_ivar_set(ruby_top_self, s_set_ivar, wick->argv[1]);
 
   str = rb_funcall(str, s_to_s, 0);
   StringValue(str);
   eval = ALLOC_N(char, RSTRING_LEN(str) + 20);
-  sprintf(eval, "%s = @____SANDBOX_COPY", RSTRING_PTR(str));
+  sprintf(eval, "%s = @____SANDBOX_SET", RSTRING_PTR(str));
 
   str = rb_eval_string(eval);
 
-  rb_ivar_set(ruby_top_self, s_copy_ivar, Qnil);
+  rb_ivar_set(ruby_top_self, s_set_ivar, Qnil);
   free(eval);
   return str;
 }
@@ -773,8 +773,8 @@ sandbox_run_wick(v)
     case SANDBOX_ACTION:
       obj = sandbox_run_action(wick);
       break;
-    case SANDBOX_COPY:
-      obj = sandbox_run_copy(wick);
+    case SANDBOX_SET:
+      obj = sandbox_run_set(wick);
       break;
   }
 
@@ -851,7 +851,7 @@ sandbox_run(kit, wick)
 }
 
 /* :nodoc: */
-VALUE sandbox_copy( self, obj_name, obj )
+VALUE sandbox_set( self, obj_name, obj )
   VALUE self;
   VALUE obj_name;
   VALUE obj;
@@ -860,7 +860,7 @@ VALUE sandbox_copy( self, obj_name, obj )
   sandkit *kit;
   Data_Get_Struct( self, sandkit, kit );
   link = Qnil;
-  return sandbox_run(kit, sandbox_copy_wick(link, obj_name, obj));
+  return sandbox_run(kit, sandbox_set_wick(link, obj_name, obj));
 }
 
 
@@ -3131,7 +3131,7 @@ void Init_sand_table()
   rb_define_method( rb_cSandboxFull, "_eval", sandbox_eval, 1 );
   rb_define_method( rb_cSandboxFull, "import", sandbox_import, 1 );
   rb_define_method( rb_cSandboxFull, "ref", sandbox_ref, 1 );
-  rb_define_method( rb_cSandboxFull, "copy", sandbox_copy, 2 );
+  rb_define_method( rb_cSandboxFull, "set", sandbox_set, 2 );
   rb_define_method( rb_cSandboxFull, "main", sandbox_get_main, 0 );
   rb_define_singleton_method( rb_cSandbox, "new", sandbox_new, -1 );
   rb_define_singleton_method( rb_cSandbox, "safe", sandbox_safe, -1 );
@@ -3144,13 +3144,13 @@ void Init_sand_table()
   rb_define_method(rb_cSandboxRef, "method_missing", sandbox_boxedclass_method_missing, -1);
   rb_undef_method(rb_singleton_class(rb_cSandboxRef), "new");
 
-  s_copy_ivar = rb_intern("@____SANDBOX_COPY");
+  s_set_ivar = rb_intern("@____SANDBOX_SET");
   s_options = rb_intern("@options");
   s_to_s = rb_intern("to_s");
   s_marshal_dump = rb_intern("marshal_dump");
   Qinit = ID2SYM(rb_intern("init"));
   Qimport = ID2SYM(rb_intern("import"));
-  Qcopy = ID2SYM(rb_intern("copy"));
+  Qset = ID2SYM(rb_intern("set"));
   Qload = ID2SYM(rb_intern("load"));
   Qenv = ID2SYM(rb_intern("env"));
   Qreal = ID2SYM(rb_intern("real"));
