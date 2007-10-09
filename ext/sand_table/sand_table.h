@@ -166,6 +166,7 @@ typedef struct SANDKIT {
 #define SANDBOX_METHOD_CALL 11
 #define SANDBOX_ACTION      12
 #define SANDBOX_SET         13
+#define SANDBOX_CONST_GET   14
 
 /* The sandwick struct is just the old go_cart struct,
  * but I want its initalization and execution methods
@@ -213,6 +214,8 @@ typedef struct {
 sandwick *sandbox_method_wick(VALUE, int, VALUE *);
 sandwick *sandbox_eval_wick(VALUE);
 sandwick *sandbox_action_wick(VALUE (*)(), VALUE);
+sandwick *sandbox_set_wick(VALUE, VALUE, VALUE);
+sandwick *sandbox_const_wick(VALUE, VALUE);
 VALUE sandbox_run(sandkit *kit, sandwick *wick);
 
 VALUE sandbox_module_new(sandkit *);

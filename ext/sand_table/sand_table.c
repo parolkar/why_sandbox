@@ -372,8 +372,12 @@ free_sandwick(wick)
   sandwick *wick;
 {
   rb_gc_unregister_address(&wick->self);
-  if (wick->calltype == SANDBOX_SET)
+  switch (wick->calltype)
+  {
+    case SANDBOX_SET:
+    case SANDBOX_CONST_GET:
     free(wick->argv);
+  }
   free(wick);
 }
 
@@ -495,7 +499,7 @@ sandbox_set_wick(link, obj_name, obj)
   wick->calltype = SANDBOX_SET;
   wick->link = link;
   wick->argc = 2;
-  wick->argv = malloc(sizeof(VALUE) * 2);
+  wick->argv = ALLOC_N(VALUE, 2);
   wick->argv[0] = obj_name;
   wick->argv[1] = obj;
   return wick;
@@ -522,6 +526,34 @@ sandbox_run_set(wick)
   rb_ivar_set(ruby_top_self, s_set_ivar, Qnil);
   free(eval);
   return str;
+}
+
+/*
+ * A "wick" for starting a sandbox that calls
+ * a method of a linked object inside that same
+ * sandbox.
+ */
+sandwick *
+sandbox_const_wick(link, name)
+  VALUE link, name;
+{
+  sandwick *wick = alloc_sandwick();
+  wick->calltype = SANDBOX_CONST_GET;
+  wick->link = link;
+  wick->argc = 1;
+  wick->argv = ALLOC(VALUE);
+  wick->argv[0] = name;
+  return wick;
+}
+
+/*
+ * Runs the method call action.
+ */
+static VALUE
+sandbox_run_const_get(wick)
+  sandwick *wick;
+{
+  return rb_const_get(wick->link, SYM2ID(wick->argv[0]));
 }
 
 #define SWAP(N) \
@@ -776,6 +808,9 @@ sandbox_run_wick(v)
     case SANDBOX_SET:
       obj = sandbox_run_set(wick);
       break;
+    case SANDBOX_CONST_GET:
+      obj = sandbox_run_const_get(wick);
+      break;
   }
 
   Data_Get_Struct( wick->banished, sandkit, banished );
@@ -1021,6 +1056,30 @@ sandbox_boxedclass_method_missing(argc, argv, self)
     VALUE box = sandbox_get_linked_box(self);
     Data_Get_Struct(box, sandkit, kit);
     return sandbox_run(kit, sandbox_method_wick(link, argc, argv));
+  }
+}
+
+/*
+ *  call-seq:
+ *     BoxedClass.const_missing => obj
+ *
+ *  Gets the constant from the class (or object)'s original environment,
+ *  passing in and returning references as needed.
+ */
+static VALUE
+sandbox_boxedclass_const_missing(self, name)
+  VALUE self, name;
+{
+  VALUE link = sandbox_get_linked_class(self);
+  if (NIL_P(link)) {
+    /* FIXME: oh, wait, this shouldn't happen! */
+    rb_raise(rb_eNoMethodError, "no link for %s", RSTRING(rb_inspect(self))->ptr);
+  } else {
+    int i;
+    sandkit *kit;
+    VALUE box = sandbox_get_linked_box(self);
+    Data_Get_Struct(box, sandkit, kit);
+    return sandbox_run(kit, sandbox_const_wick(link, name));
   }
 }
 
@@ -2300,6 +2359,7 @@ Init_kit(kit, use_base)
   /* BoxedClass hooks */
   kit->cBoxedClass = sandbox_defclass(kit, "BoxedClass", kit->cObject);
   rb_define_singleton_method( kit->cBoxedClass, "method_missing", sandbox_boxedclass_method_missing, -1 );
+  rb_define_singleton_method( kit->cBoxedClass, "const_missing", sandbox_boxedclass_const_missing, 1 );
   rb_define_method( kit->cBoxedClass, "method_missing", sandbox_boxedclass_method_missing, -1 );
   SAND_UNDEF(cBoxedClass, "new");
 }
