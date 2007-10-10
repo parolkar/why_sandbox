@@ -20,7 +20,8 @@ static sandkit real;
 static sandkit base;
 
 static VALUE Qimport, Qset, Qinit, Qload, Qenv, Qio, Qreal, Qref, Qall;
-VALUE rb_cSandbox, rb_cSandboxFull, rb_cSandboxSafe, rb_eSandboxException, rb_cSandboxRef, rb_cSandboxWick, rb_cSandboxTransfer;
+VALUE rb_cSandbox, rb_cSandboxFull, rb_cSandboxSafe, rb_eSandboxException, rb_cSandboxRef, 
+      rb_cSandboxWick, rb_cSandboxTransfer, rb_aUnsafeMethods;
 static ID s_options, s_to_s, s_set_ivar, s_marshal_dump;
 
 static VALUE old_toplevel;
@@ -1050,6 +1051,10 @@ sandbox_boxedclass_method_missing(argc, argv, self)
   if (NIL_P(link)) {
     /* FIXME: oh, wait, this shouldn't happen! */
     rb_raise(rb_eNoMethodError, "no link for %s", RSTRING(rb_inspect(self))->ptr);
+  } else if (!SYMBOL_P(argv[0])) {
+    rb_raise(rb_eArgError, "method_missing expects a symbolized method name");
+  } else if (rb_ary_includes(rb_aUnsafeMethods, argv[0])) {
+    rb_raise(rb_eArgError, "method cannot be called");
   } else {
     int i;
     sandkit *kit;
@@ -3171,6 +3176,9 @@ Init_kit_prelude(kit)
 
 void Init_sand_table()
 {
+  long i;
+  VALUE obj_methods = rb_class_instance_methods(0, NULL, rb_cObject);
+
   ruby_sandbox_save = sandbox_save;
   ruby_sandbox_restore = sandbox_restore;
 
@@ -3179,6 +3187,11 @@ void Init_sand_table()
   Init_kit_io(&base, 0);
   Init_kit_env(&base, 0);
   Init_kit_real(&base, 0);
+
+  rb_aUnsafeMethods = rb_ary_new();
+  for (i = 0; i < RARRAY_LEN(obj_methods); i++)
+    rb_ary_push(rb_aUnsafeMethods, rb_str_intern(rb_ary_entry(obj_methods, i)));
+  rb_global_variable(&rb_aUnsafeMethods);
 
   rb_cSandbox = rb_define_module("Sandbox");
   rb_cSandboxFull = rb_define_class_under(rb_cSandbox, "Full", rb_cObject);
