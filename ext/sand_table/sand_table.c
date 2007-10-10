@@ -1036,6 +1036,34 @@ VALUE sandbox_current( self )
 
 /*
  *  call-seq:
+ *     Sandbox::Ref.method_missing => obj
+ *
+ *  Executes the method under the class (or object)'s original environment,
+ *  passing in and returning references as needed.
+ */
+static VALUE
+sandbox_ref_method_missing(argc, argv, self)
+  int argc;
+  VALUE *argv;
+  VALUE self;
+{
+  VALUE link = sandbox_get_linked_class(self);
+  if (NIL_P(link)) {
+    /* FIXME: oh, wait, this shouldn't happen! */
+    rb_raise(rb_eNoMethodError, "no link for %s", RSTRING(rb_inspect(self))->ptr);
+  } else if (!SYMBOL_P(argv[0])) {
+    rb_raise(rb_eArgError, "method_missing expects a symbolized method name");
+  } else {
+    int i;
+    sandkit *kit;
+    VALUE box = sandbox_get_linked_box(self);
+    Data_Get_Struct(box, sandkit, kit);
+    return sandbox_run(kit, sandbox_method_wick(link, argc, argv));
+  }
+}
+
+/*
+ *  call-seq:
  *     BoxedClass.method_missing => obj
  *
  *  Executes the method under the class (or object)'s original environment,
@@ -3214,7 +3242,7 @@ void Init_sand_table()
   rb_cSandboxWick = rb_define_class_under(rb_cSandbox, "Wick", rb_cObject);
   rb_cSandboxTransfer = rb_define_class_under(rb_cSandbox, "Transfer", rb_cObject);
   rb_cSandboxRef = rb_define_class_under(rb_cSandbox, "Ref", rb_cObject);
-  rb_define_method(rb_cSandboxRef, "method_missing", sandbox_boxedclass_method_missing, -1);
+  rb_define_method(rb_cSandboxRef, "method_missing", sandbox_ref_method_missing, -1);
   rb_undef_method(rb_singleton_class(rb_cSandboxRef), "new");
 
   s_set_ivar = rb_intern("@____SANDBOX_SET");
